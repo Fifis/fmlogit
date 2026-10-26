@@ -12,7 +12,7 @@ test_that("Margins plots preserve effects, grouping and graphics settings", {
   grDevices::pdf(file)
   on.exit({ grDevices::dev.off(); unlink(file) }, add = TRUE)
   mfrow <- graphics::par("mfrow")
-  result <- plot(object, varlist = c("indicator", "income"), x_data = x,
+  result <- plot(x = object, varlist = c("indicator", "income"), x_data = x,
                  against.x = "income", group.x = "indicator",
                  group.algebra = function(z) z > 0, mfrow = c(2, 2))
 
