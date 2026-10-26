@@ -1,3 +1,5 @@
+#' @importFrom Rdpack reprompt
+
 asterisk <- function(x, k = c(0.10, 0.05, 0.01, 0.001)) {
   stopifnot(length(k) > 0, all(diff(k) < 0), !anyNA(k))
 
@@ -14,6 +16,25 @@ asterisk <- function(x, k = c(0.10, 0.05, 0.01, 0.001)) {
 
   level <- n - findInterval(x, rev(k), left.open = TRUE)
   symbols[level + 1]
+}
+
+# Return the multinomial-logit probabilities, linear indices and log denominator.
+# theta contains the (J - 1) coefficient vectors, stacked by alternative.
+softmax <- function(theta, X, J) {
+  K <- ncol(X)
+  B <- rbind(rep(0, K), matrix(theta, nrow = J - 1L, ncol = K, byrow = TRUE))
+  
+  eta <- tcrossprod(X, B)            # N x J
+  shift <- apply(eta, 1L, max)      # N
+  shifted <- sweep(eta, 1L, shift, FUN = "-")
+  numerator <- exp(shifted)
+  denominator <- rowSums(numerator)
+  
+  list(
+    probabilities = numerator / denominator,
+    eta = eta,
+    log_denom = shift + log(denominator)
+  )
 }
 
 testcols <- function(x) {
