@@ -31,7 +31,7 @@
 #'
 #' @examples
 #' # generate fmlogit summary
-#' # results1 <- fmlogit(y,X)
+#' # results1 <- fmlogit(y, x)
 #'
 #' # generate marginal effects summary
 #' # effects1 <- effects(results1,effect="marginal")
@@ -47,54 +47,48 @@
 # generate fmlogit style table
 ###########
 
-summary.fmlogit <- function(object, varlist = NULL, sepline = F, digits = 3,
-                           add.info = T, list = T,
-                           sigcode = c(0.1, 0.05, 0.01, 0.001), print = F) {
-  # define significance code first.
-
+summary.fmlogit <- function(object, varlist = NULL, sepline = FALSE, digits = 3,
+                           add.info = TRUE, list = TRUE,
+                           sigcode = c(0.1, 0.05, 0.01, 0.001), print = FALSE) {
   # main text
-  # pre matters
-  if (!class(object) == "fmlogit") stop("Expect an fmlogit object. Wrong object type given.")
-  ynames <- names(object[[1]])
-  xnames <- rownames(object[[1]][[1]])
+  if (!inherits(object, "fmlogit")) stop("Expect an fmlogit object. Wrong object type given.")
+  ynames <- names(object$estimates)
+  xnames <- rownames(object$estimates[[1L]])
   if (length(varlist) == 0) varlist <- xnames
   var.col.no <- which(xnames %in% varlist)
   j <- object$count[3]
-  K = length(var.col.no)
+  K <- length(var.col.no)
   if (K < length(varlist)) warning("Some variables requested are not in the variable list. Those variables are omitted.")
+  if (K == 0L) stop("No matching variables in 'varlist'.")
   varlist <- xnames[var.col.no]
   # generating tables
   if (!sepline) {
     store.mat <- matrix(ncol = j - 1, nrow = K)
     colnames(store.mat) <- ynames
     rownames(store.mat) <- xnames[var.col.no]
-    for (i in 1:(j - 1)) {
-      temp_data <- signif(object$estimates[[i]][var.col.no, ], digits = digits)
-      if (is.null(dim(temp_data))) {
-        store.mat[, i] <- paste(temp_data[1], "(", temp_data[2], ")", asterisk(temp_data[4], sigcode), sep = "")
-        next
-      }
+    for (i in seq_len(j - 1L)) {
+      temp_data <- signif(object$estimates[[i]][var.col.no, , drop = FALSE], digits = digits)
       store.mat[, i] <- apply(temp_data, 1, function(x) paste(x[1], "(", x[2], ")", asterisk(x[4], sigcode), sep = ""))
     }} else {
     store_beta <- store_se <- matrix(ncol = j - 1, nrow = K)
     colnames(store_beta) <- ynames
     rownames(store_beta) <- varlist
-    for (i in 1:(j - 1)) {
-      temp_data <- signif(object$estimates[[i]][var.col.no, ], digits = digits)
-      if (is.null(dim(temp_data))) temp_data <- as.matrix(temp_data)
+    for (i in seq_len(j - 1L)) {
+      temp_data <- signif(object$estimates[[i]][var.col.no, , drop = FALSE], digits = digits)
       store_beta[, i] <- apply(temp_data, 1, function(x) paste(x[1], asterisk(x[4], sigcode), sep = ""))
       store_se[, i] <- apply(temp_data, 1, function(x) paste("(", x[2], ")", sep = ""))
     }
-    for (i in 1:K) {
+    for (i in seq_len(K)) {
       if (i == 1) store.mat <- matrix(ncol = j - 1)
       store.mat <- rbind(store.mat, store_beta[i, ], store_se[i, ])
     }
-    store.mat <- store.mat[-1, ]
+    store.mat <- store.mat[-1, , drop = FALSE]
+    colnames(store.mat) <- ynames
     rownames(store.mat) <- rep(" ", length = nrow(store.mat))
     rownames(store.mat)[seq(1, K * 2, 2)] <- varlist
   }
   # output matters
-  sig.print <- paste("Significance code: ", paste0(sigcode, " ", asterisk(sigcode * 0.99999999), collapse = "  "))
+  sig.print <- paste("Significance code: ", paste0(sigcode, " ", asterisk(sigcode * 0.99999999, sigcode), collapse = "  "))
   if (add.info) {
     nc <- paste("N=", object$count[1], sep = "")
     llf <- paste("log pseudo-likelihood=", round(object$likelihood, digits = 2), sep = "")
@@ -128,17 +122,18 @@ summary.fmlogit <- function(object, varlist = NULL, sepline = F, digits = 3,
 #' @rdname summary.fmlogit
 #' @export summary.fmlogit.margins
 
-summary.fmlogit.margins <- function(object, varlist = NULL, sepline = F, digits = 3, add.info = T, list = T, sigcode = c(0.05, 0.01, 0.001),
-                                   print = F) {
+summary.fmlogit.margins <- function(object, varlist = NULL, sepline = FALSE, digits = 3, add.info = TRUE, list = TRUE, sigcode = c(0.05, 0.01, 0.001),
+                                   print = FALSE) {
   # main text
-  if (!class(object) == "fmlogit.margins") stop("Expect an fmlogit.margins object. Wrong object type given.")
-  ynames <- rownames(object[[1]])
-  xnames <- colnames(object[[1]])
+  if (!inherits(object, "fmlogit.margins")) stop("Expect an fmlogit.margins object. Wrong object type given.")
+  ynames <- rownames(object$effects)
+  xnames <- colnames(object$effects)
   if (length(varlist) == 0) varlist <- xnames
   var.col.no <- which(xnames %in% varlist)
   j <- length(ynames)
   K <- length(var.col.no)
   if (K < length(varlist)) warning("Some variables requested are not in the variable list. Those variables are omitted.")
+  if (K == 0L) stop("No matching variables in 'varlist'.")
   varlist <- xnames[var.col.no]
 
   # table process
@@ -146,33 +141,33 @@ summary.fmlogit.margins <- function(object, varlist = NULL, sepline = F, digits 
   if (!sepline) {
     store.mat <- matrix(ncol = j, nrow = K)
     colnames(store.mat) <- ynames
-    rownames(store.mat) <- xnames
+    rownames(store.mat) <- varlist
     if (object$R > 0) {
-      for (i in var.col.no) {
-        temp_data <- signif(object$ztable[[i]], digits = digits)
+      for (i in seq_len(K)) {
+        temp_data <- signif(object$ztable[[var.col.no[i]]], digits = digits)
         store.mat[i, ] <- apply(temp_data, 1, function(x) paste(x[1], "(", x[2], ")", asterisk(x[4], sigcode), sep = ""))
       }} else {
-      store.mat <- signif(t(object$effects), digits = digits)
+      store.mat <- signif(t(object$effects[, var.col.no, drop = FALSE]), digits = digits)
     }
   } else {
     store_beta <- store_se <- matrix(ncol = j, nrow = K)
     colnames(store_beta) <- ynames
-    rownames(store_beta) <- xnames
-    for (i in var.col.no) {
-      temp_data <- signif(object$ztable[[i]], digits = digits)
+    rownames(store_beta) <- varlist
+    for (i in seq_len(K)) {
+      temp_data <- signif(object$ztable[[var.col.no[i]]], digits = digits)
       store_beta[i, ] <- apply(temp_data, 1, function(x) paste(x[1], asterisk(x[4], sigcode), sep = ""))
       store_se[i, ] <- apply(temp_data, 1, function(x) paste("(", x[2], ")", sep = ""))
     }
-    for (i in 1:K) {
+    for (i in seq_len(K)) {
       if (i == 1) store.mat <- matrix(ncol = j)
       store.mat <- rbind(store.mat, store_beta[i, ], store_se[i, ])
     }
-    store.mat <- store.mat[-1, ]
+    store.mat <- store.mat[-1, , drop = FALSE]
     rownames(store.mat) <- rep("", length = nrow(store.mat))
     rownames(store.mat)[seq(1, K * 2, 2)] <- varlist
   }
   # output matters
-  sig.print <- paste("Significance code: ", paste0(sigcode, " ", asterisk(sigcode * 0.99999999), collapse = "  "))
+  sig.print <- paste("Significance code: ", paste0(sigcode, " ", asterisk(sigcode * 0.99999999, sigcode), collapse = "  "))
   if (add.info) {
     expl <- object$expl
   }
@@ -204,27 +199,33 @@ summary.fmlogit.margins <- function(object, varlist = NULL, sepline = F, digits 
 
 summary.fmlogit.wtp <- function(object, varlist = NULL, sepline = FALSE,
                                 digits = 3, sigcode = c(0.05, 0.01, 0.001),
-                                print = F) {
+                                print = FALSE) {
   # main text
-  if (!class(object) == "fmlogit.wtp") stop("Expect an fmlogit.wtp object. Wrong object type given.")
-  if (colnames(object$wtp)[1] != "estimate") return(object$wtp) # no need to summary.
-  xnames <- rownames(object$wtp)
+  if (!inherits(object, "fmlogit.wtp")) stop("Expect an fmlogit.wtp object. Wrong object type given.")
+  has_se <- identical(colnames(object$wtp), c("estimate", "std", "z", "p-value"))
+  xnames <- if (has_se) rownames(object$wtp) else colnames(object$wtp)
   if (length(varlist) == 0) varlist <- xnames
   var.col.no <- which(xnames %in% varlist)
   K <- length(var.col.no)
   if (K < length(varlist)) warning("Some variables requested are not in the variable list. Those variables are omitted.")
+  if (K == 0L) stop("No matching variables in 'varlist'.")
   varlist <- xnames[var.col.no]
-  sig.print <- paste("Significance code: ", paste0(sigcode, " ", asterisk(sigcode * 0.99999999), collapse = "  "))
+  if (!has_se) {
+    store.mat <- object$wtp[, var.col.no, drop = FALSE]
+    if (print) print(store.mat)
+    return(store.mat)
+  }
+  sig.print <- paste("Significance code: ", paste0(sigcode, " ", asterisk(sigcode * 0.99999999, sigcode), collapse = "  "))
   if (!sepline) {
     # table process
-    store.mat <- apply(signif(object$wtp[var.col.no, ], digits = digits), 1, function(x) paste(x[1], "(", x[2], ")", asterisk(x[4], sigcode), sep = ""))
+    store.mat <- apply(signif(object$wtp[var.col.no, , drop = FALSE], digits = digits), 1, function(x) paste(x[1], "(", x[2], ")", asterisk(x[4], sigcode), sep = ""))
     store.mat <- as.data.frame(store.mat)
     colnames(store.mat) <- NULL
     # output matters
   } else {
-    store_beta <- apply(signif(object$wtp[var.col.no, ], digits = digits), 1, function(x) paste(x[1], asterisk(x[4], sigcode), sep = ""))
-    store_se <- apply(signif(object$wtp[var.col.no, ], digits = digits), 1, function(x) paste("(", x[2], ")", sep = ""))
-    for (i in 1:K) {
+    store_beta <- apply(signif(object$wtp[var.col.no, , drop = FALSE], digits = digits), 1, function(x) paste(x[1], asterisk(x[4], sigcode), sep = ""))
+    store_se <- apply(signif(object$wtp[var.col.no, , drop = FALSE], digits = digits), 1, function(x) paste("(", x[2], ")", sep = ""))
+    for (i in seq_len(K)) {
       if (i == 1) store.mat <- vector()
       store.mat <- c(store.mat, store_beta[i], store_se[i])
     }
@@ -233,4 +234,11 @@ summary.fmlogit.wtp <- function(object, varlist = NULL, sepline = FALSE,
   }
   if (print) {print(store.mat);print(sig.print)}
   return(store.mat)
+}
+
+# NAMESPACE currently exports these methods without registering S3 dispatch.
+.onLoad <- function(libname, pkgname) {
+  registerS3method("summary", "fmlogit", summary.fmlogit, envir = asNamespace(pkgname))
+  registerS3method("summary", "fmlogit.margins", summary.fmlogit.margins, envir = asNamespace(pkgname))
+  registerS3method("summary", "fmlogit.wtp", summary.fmlogit.wtp, envir = asNamespace(pkgname))
 }
