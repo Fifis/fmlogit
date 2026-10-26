@@ -1,3 +1,67 @@
+#' Find good initial values for fmlogit
+#' 
+#' Run pairwise fractional logits of \eqn{y_j / (y_1 + y_j)}{y_j / (y_1 + y_j)}.
+#' 
+#' @details
+#' The reasonable initial value comes from `J-1` separate weighted binary-logit
+#' regressions, each comparing one alternative with the baseline alternative.
+#' Since the normalisation is such that the first `K` elements are zeros (and
+#' do not enter the optimisation), we note that
+#' \eqn{E(y_{ij}\mid x_i) = p_{ij}}{E(y_ij | x_i) = p_ij} and
+#' \eqn{p_{ij}/p_{i1} = \exp (x_i' \beta_j)}{p_ij / p_i1 = exp (x_i' beta_j)}.
+#' Now define \eqn{\pi_{ij} = \frac{p_{ij}}{p_{i1} + p_{ij}}}{pi_ij = p_ij / (p_i1 + p_ij)}.
+#' Substituting the multinomial-logit probabilities gives
+#' \eqn{\pi_{ij} = \frac{\exp(x_i' \beta_j)}{1 + \exp(x_i' \beta_j)} = 
+#' \Lambda(x_i' \beta_j)}{pi_ij = exp(x_i' beta_j) / (1 + exp(x_i' beta_j)) =
+#' Lambda(x_i' beta_j)}.
+#' This is a pairwise application of the fractional quasi-likelihood logic in
+#' Papke and Wooldridge (1996) and Mullahy (2015).
+#' 
+#' 
+#' @export
+initEst <- function(y, x, weights = NULL) {
+  y <- as.matrix(y)
+  x <- as.matrix(x)
+
+  j <- ncol(y)
+  K <- ncol(x)
+  n <- NROW(y)
+  
+  if (is.null(colnames(y))) colnames(y) <- paste0("share", 1:j)
+  if (is.null(colnames(x))) colnames(x) <- paste0("X", 1:K)
+  
+  if (is.null(weights)) weights <- rep(1, n)
+  if (!is.numeric(weights) ||  length(weights) != n0 || anyNA(weights) ||
+      any(!is.finite(weights)) || any(weights < 0)) {
+    stop("weights must be finite, non-negative, and match NROW(y).")
+  }
+
+  # Estimate each non-baseline alternative against alternative 1
+  b <- lapply(2:j, function(h) {
+    # Total observed share of baseline and alternative h
+    w <- y[, 1] + y[, h]
+    # Observations where both shares are zero contribute nothing
+    keep <- w > 0
+    # Pairwise fractional response
+    dat <- data.frame(z = y[keep, h] / w[keep], x[keep, , drop = FALSE])
+    
+    fit <- glm(z ~ ., data = dat, weights = w[keep] * weights[keep],
+               family = quasibinomial(link = "logit"))
+    coef(fit)
+  })
+  names(b) <- colnames(y)[2:j]
+  b <- unlist(b)
+
+  which.bad <- which(!is.finite(b))
+  if (any(which.bad)) {
+    b[1:length(b)] <- 0
+    warning("A pairwise GLM did not return finite coefficients; using zeros instead.")
+  }
+  
+  return(b)
+}
+
+
 # Estimation of Fractional Multinomial Logit Models
 #
 # fmlogit allows you to estimate fractional multinomial logit models with
@@ -15,17 +79,20 @@
 #' @param y the dependent variable (N*J). Can be a matrix or a named data frame.
 #'   The first column of the matrix is automatically treated as the baseline.
 #' @param x independent variable (N*K). Can be a matrix or a named data frame.
-#'   If there is no intercept term in the x, then an intercept term is
-#'   automatically added.
+#'   An intercept term is automatically added.
 #' @param weights Observation (survey) weights denoting the relative importance
 #'   of observations. Defaults to equal weights (a vector of ones).
-#' @param beta0 Initial value for beta used in optimization. Uses a 1*K(J-1)
-#'   vector. Default to a vector of zeros.
+#' @param beta0 Initial value for the coefficient vector used in optimization.
+#'   Default to a vector of smart values built from individual `J-1` estimated
+#'   equations (via `glm()`), concatenated one after another.
 #' @param method Method of optimization. Passed to `maxLik()`.
 #'   Choose from "NR", "BFGS", "CG", "BHHH", "SANN",or "NM". Default to "CG",
 #'   the conjugate gradients method. See Details.
-#' @param maxit Maximum number of iterations.
+#' @param iterlim Maximum number of iterations.
 #' @param abstol Absolute convergence tolerance.
+#' @param print.level Integer: optimiser verbosity. `0` silences the output,
+#'   `1` prints the initial and final details, `2` prints each iteration's
+#'   output.
 #' @param ... additional parameters passed to \code{maxLik()}
 #'
 #' @return The function returns an object of class "fmlogit". Use
@@ -68,6 +135,7 @@
 #' function for different maximization methods in R. This include most methods
 #' provided by \code{\link{maxLik}},  but also other methods such as BHHH
 #' (Berndt--Hall--Hall--Hausman).
+#' 
 #'
 #' MLE convergence can be a problem in R, especially if the data size is large
 #' with many explanatory variables. It is recommended to call CG (Conjugate
@@ -91,7 +159,7 @@
 
 
 fmlogit <- function(y, x, weights = NULL, beta0 = NULL, method = "CG",
-                    maxit = 5e+05, abstol = 1e-05, ...) {
+                    iterlim = 5e+05, abstol = 1e-05, print.level = 1, ...) {
   start.time <- proc.time()
 
   n0 <- NROW(y)
@@ -179,15 +247,13 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL, method = "CG",
     }
     return(weights * llf)
   }
-  if (length(beta0) == 0) {
-    beta0 <- rep(0, (k + 1) * (j - 1))
-  }
+  if (is.null(beta0)) beta0 <- initEst(y = y, x = x, weights = weights)
   if (length(beta0) != (k + 1) * (j - 1)) {
-    beta0 <- rep(0, (k + 1) * (j - 1))
-    warning("Wrong length of beta0 given. Using ", (k+1)*(j-1), " zeros instead.")
+    beta0 <- initEst(y = y, x = x, weights = weights)
+    warning("Wrong length of beta0 given. Using smart initial values instead.")
   }
   opt <- maxLik::maxLik(QMLE, start = beta0, method = method,
-                control = list(iterlim = maxit, tol = abstol), ...)
+                control = list(iterlim = iterlim, tol = abstol, print.level = print.level), ...)
   betamat <- matrix(opt$estimate, ncol = k + 1, byrow = T)
   betamat_aug <- rbind(rep(0, k + 1), betamat)
   colnames(betamat_aug) <- xnames
@@ -235,6 +301,7 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL, method = "CG",
   }
   if (length(ynames) > 0) names(listmat) <- ynames[2:j]
   outlist <- list()
+  outlist$raw.estimates <- opt$estimate
   outlist$estimates <- listmat
   outlist$baseline <- ynames[1]
   outlist$likelihood <- opt$maximum

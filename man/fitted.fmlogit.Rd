@@ -3,6 +3,17 @@
 \name{fitted.fmlogit}
 \alias{fitted.fmlogit}
 \alias{residuals.fmlogit}
+\alias{predicted.fmlogit}
+\alias{Extract}
+\alias{fitted}
+\alias{dependent}
+\alias{variable}
+\alias{from}
+\alias{a}
+\alias{fractional}
+\alias{multinomial}
+\alias{logit}
+\alias{model.}
 \alias{predict.fmlogit}
 \title{Extract fitted values, residuals, and predictions}
 \usage{
@@ -15,11 +26,11 @@
 \arguments{
 \item{object}{A "fmlogit" object.}
 
-\item{newdata}{A new X matrix to perform model prediction. If Null, default to the original dataset. 
-X can be a vector with length k, or a matrix with k columns, where k is the number of explanatory 
+\item{newdata}{A new X matrix to perform model prediction. If Null, default to the original dataset.
+X can be a vector with length k, or a matrix with k columns, where k is the number of explanatory
 variables in the original model.}
 
-\item{newbeta}{A new augmented matrix of coefficients that can be used to predict outcome variables. 
+\item{newbeta}{A new augmented matrix of coefficients that can be used to predict outcome variables.
 Feeds into object$coefficient, which contains the baseline coefficient. Useful for constructing
 confidence intervals via simulation or bootstrapping.}
 }
@@ -27,10 +38,10 @@ confidence intervals via simulation or bootstrapping.}
 Extract fitted values, residuals, and predictions
 }
 \examples{
-#results1 = fmlogit(y,X)
+# results1 = fmlogit(y,X)
 fitted(results1)
 residuals(results1)
 predict(results1)
 # predict using the first observation from the original dataset.
-predict(results1,X[1,])
+predict(results1, X[1, ])
 }

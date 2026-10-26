@@ -6,16 +6,36 @@
 \alias{summary.fmlogit.wtp}
 \title{Generate summary tables for fmlogit objects}
 \usage{
-\method{summary}{fmlogit}(object, varlist = NULL, sepline = F,
-  digits = 3, add.info = T, list = T, sigcode = c(0.05, 0.01,
-  0.001), print = F)
+\method{summary}{fmlogit}(
+  object,
+  varlist = NULL,
+  sepline = F,
+  digits = 3,
+  add.info = T,
+  list = T,
+  sigcode = c(0.1, 0.05, 0.01, 0.001),
+  print = F
+)
 
-\method{summary}{fmlogit.margins}(object, varlist = NULL, sepline = F,
-  digits = 3, add.info = T, list = T, sigcode = c(0.05, 0.01,
-  0.001), print = F)
+\method{summary}{fmlogit.margins}(
+  object,
+  varlist = NULL,
+  sepline = F,
+  digits = 3,
+  add.info = T,
+  list = T,
+  sigcode = c(0.05, 0.01, 0.001),
+  print = F
+)
 
-\method{summary}{fmlogit.wtp}(object, varlist = NULL, sepline = F,
-  digits = 3, sigcode = c(0.05, 0.01, 0.001), print = F)
+\method{summary}{fmlogit.wtp}(
+  object,
+  varlist = NULL,
+  sepline = FALSE,
+  digits = 3,
+  sigcode = c(0.05, 0.01, 0.001),
+  print = F
+)
 }
 \arguments{
 \item{object}{an object with class "fmlogit", "fmlogit.margins", or "fmlogit.wtp".}
@@ -31,11 +51,12 @@ be processed.}
 
 \item{list}{whether to output a list object, or a single data frame.}
 
-\item{sigcode}{the significance code to be used. Has to be a three-component vector.}
+\item{sigcode}{Significance cut-offs to be used (e.g. `c(0.1, 0.05, 0.01)`,
+but can be longer.).}
 }
 \value{
-Either a list (for display purposes) or a data.frame (for csv output purposes). If list return (which is
-the default) is selected, then the list will contain 4 components: $estimates the estimate; $N number of 
+Either a list (for display purposes) or a data.frame (for CSV output purposes). If list return (which is
+the default) is selected, then the list will contain 4 components: $estimates the estimate; $N number of
 observations, $llf value of the log-likelihood function; and $baseline the name of the baseline choice.
 }
 \description{
@@ -43,24 +64,24 @@ Generate tables of coefficient estimates, partial effects, and willingness to pa
 fmlogit-type objects.
 }
 \details{
-This module provides summary methods for three fmlogit objects: \code{fmlogit}, \code{fmlogit.margins}
-, and \code{fmlogit.wtp}. 
+This module provides summary methods for three fmlogit objects:
+\code{fmlogit}, \code{fmlogit.margins}, and \code{fmlogit.wtp}.
 
 The summary method offers several options to the users. The user can choose for a list output \code{list=T}, which is
  good for display and quoting purposes, or a data frame output \code{list=F}, which is good for table outputs. The user
-can also specify whether to provide additional information other than the parameter estimates, whether to use 
+can also specify whether to provide additional information other than the parameter estimates, whether to use
 seperate lines for the estimates and the standard errors (which mimics the output style in Stata),
  as well as the significance code.
 }
 \examples{
 # generate fmlogit summary
-#results1 = fmlogit(y,X)
+# results1 <- fmlogit(y,X)
 
 # generate marginal effects summary
-#effects1 = effects(results1,effect="marginal")
+# effects1 <- effects(results1,effect="marginal")
 summary(effects1)
 
 # generate latex style output
 # require(xtable)
-xtable(summary(effects1,list=F,sepline=T))
+xtable(summary(effects1, list = F, sepline = T))
 }

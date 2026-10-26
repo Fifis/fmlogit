@@ -11,7 +11,7 @@ wtp(object, wtp.vec, varlist = NULL, indv.obs = F)
 
 \item{wtp.vec}{A 1*J vector that contains the willingness to pay for each choice j.}
 
-\item{varlist}{A string vector which provides the name of variables to calculate 
+\item{varlist}{A string vector which provides the name of variables to calculate
 the wtp. If missing, all variables in object will be calculated.}
 }
 \value{
@@ -21,22 +21,22 @@ A matrix containing the estimates, standard error, z-stats, and p-value.
 Calculates the willingness to pay for fractional multinomial logit models.
 }
 \details{
-This function calculates the aggregate effect of a variable on the 
-"willingness to pay" by linearly multiplying the average partial effect with ex-ante (arbitary) 
-willingness to pay numbers associated with each choice. 
+This function calculates the aggregate effect of a variable on the
+"willingness to pay" by linearly multiplying the average partial effect with ex-ante (arbitary)
+willingness to pay numbers associated with each choice.
 
 Suppose there are three choices A,B,C, each with a willingness to pay (or cost, profit, budget),
-of 100, 200, and 300. The discrete effect of variable X on A,B and C are 0.5, 0.5, and -1, with 
-standard error 0.2, 0.3 and 0.5. The aggregated discrete effect of X on the total willingness 
+of 100, 200, and 300. The discrete effect of variable X on A,B and C are 0.5, 0.5, and -1, with
+standard error 0.2, 0.3 and 0.5. The aggregated discrete effect of X on the total willingness
 to pay (or cost), is thus 100*0.5 + 200*0.5 + 300*(-1) = -150. And the standard error can be also
-calculated to be 162.8, assuming that the standard error is independent. 
-A simple z-test is provided to test whether the aggregate effect is different from zero. 
+calculated to be 162.8, assuming that the standard error is independent.
+A simple z-test is provided to test whether the aggregate effect is different from zero.
 
 Note that if the input fmlogit.margins object has no standard error computation, then no standard error
 }
 \examples{
-#results1 = fmlogit(y,X)
-#effects1 = effects(results1,effect="marginal",se=T)
-# assume that the WTP = 1,2,3,...J for each choice j. 
-wtp(effects1,seq(1:nrow(effects1$effects))) 
+# results1 <- fmlogit(y,X)
+# effects1 <- effects(results1,effect="marginal",se=T)
+# assume that the WTP = 1,2,3,...J for each choice j.
+wtp(effects1, seq(1:nrow(effects1$effects)))
 }

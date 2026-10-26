@@ -4,7 +4,9 @@
 \name{spending}
 \alias{spending}
 \title{Government Spending by Dutch Cities in 2005}
-\format{A data frame with 429 row and 12 columns.}
+\format{
+A data frame with 429 row and 12 columns.
+}
 \source{
 \href{http://fmwww.bc.edu/repec/bocode/c/citybudget.dta}
 }
@@ -13,7 +15,7 @@ data(spending)
 }
 \description{
 Data from 429 Dutch cities with governmental spending on each sub-category
-, and city attributes.
+and city attributes.
 }
 \examples{
 spending

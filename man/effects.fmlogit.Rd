@@ -4,23 +4,29 @@
 \alias{effects.fmlogit}
 \title{Average Partial Effects of the Covariates}
 \usage{
-\method{effects}{fmlogit}(object, effect = c("marginal", "discrete"),
-  marg.type = "atmean", se = F, varlist = NULL, at = NULL,
-  R = 1000)
+\method{effects}{fmlogit}(
+  object,
+  effect = c("marginal", "discrete"),
+  marg.type = "atmean",
+  se = F,
+  varlist = NULL,
+  at = NULL,
+  R = 1000
+)
 }
 \arguments{
 \item{object}{An "fmlogit" object.}
 
-\item{effect}{Can be "marginal", for marginal effect; or "discrete", for discrete changes from
-the min to the max.}
+\item{effect}{Can be "marginal", for marginal effect; or "discrete", for
+discrete changes from the min to the max.}
 
-\item{marg.type}{Type of marginal or discrete effects to be computed. Default to "atmean", the effect at 
+\item{marg.type}{Type of marginal or discrete effects to be computed. Default to "atmean", the effect at
 the mean of all covariates. Also take "aveacr", the averaged effects across all observations. See details.}
 
 \item{se}{Whether to calculate standard errors for those margins. See details.}
 
-\item{varlist}{A string vector which provides the name of variables to calculate 
-the marginal effect. If missing, all variables except the constant will be calculated. 
+\item{varlist}{A string vector which provides the name of variables to calculate
+the marginal effect. If missing, all variables except the constant will be calculated.
 Use "constant" if wish to compute the marginal effect of constant.}
 
 \item{at}{Specify values of the X-matrix at which the partial effect will be retrieved. Expect a vector input
@@ -28,7 +34,7 @@ of length K-1. Only supported for \code{marg.type="atmean"}. See \code{predict.f
 
 \item{R}{Number of times to sample for the Krinsky-Robb standard error. Default to 1000.}
 
-\item{marg.list}{A list of matrices storing the marginal effect matrix for each observation. Exists 
+\item{marg.list}{A list of matrices storing the marginal effect matrix for each observation. Exists
 only if marg.type="aveacr".}
 }
 \value{
@@ -36,7 +42,7 @@ The function returns an object of class "fmlogit.margins". It contains the follo
 
 \code{effects} A matrix of calculated effects.
 
-\code{se} A matrix of standard errors corresponding to the effects. Shows up if se=T for the 
+\code{se} A matrix of standard errors corresponding to the effects. Shows up if se=T for the
 input parameter.
 
 \code{ztable} A list of matrices containing effects, standard errors, z-stats and p-values.
@@ -46,43 +52,44 @@ input parameter.
 \code{expl} String message explaining the effects calculated.
 }
 \description{
-Calculate average partial effects (APE) of independent variable from a fractional multinomial logit model.
+Calculate average partial effects (APE) of independent variable from a
+  fractional multinomial logit model.
 }
 \details{
 This module calculates the average partial effects (APEs) from a fractional multinomial logit model.
-Partial effects are the counterpart of the marginal effects in a linear model setting. In linear models, 
-usually the parameter estimate itself represents marginal effect (if the variable in question is continuous). 
+Partial effects are the counterpart of the marginal effects in a linear model setting. In linear models,
+usually the parameter estimate itself represents marginal effect (if the variable in question is continuous).
 In logit models, however, the parameter estimates at hand is the effect on log-ratio between the choice variable
-and the baseline variable. This function is intended to extract APEs from the 
+and the baseline variable. This function is intended to extract APEs from the
 coefficient estimates completed from the fractional multinomial logit models.
 
 This function allows for two types of partial effects: marginal effect, and discrete effect.
-Marginal effect represents how a unit change in one continuous variable x may influence the choice variable y. 
-The estimate of marginal effect is very straighforward. However, special care is needed when averaging 
+Marginal effect represents how a unit change in one continuous variable x may influence the choice variable y.
+The estimate of marginal effect is very straighforward. However, special care is needed when averaging
 the marginal effect across observations to acquire APE. One approach is to use the estimate of the marginal effect while setting
 other explanatory variables at the mean. We call this marginal effect at the mean (MEM), which corresponds
 to the option \code{marg.type=atmean}. Another approach is to take the average of marginal effects for each
 individual. We call this average marginal effect (AME), which corresponds to the option \code{marg.type=
-aveacr}. 
+aveacr}.
 
-The discrete effect represents how a discrete change in one specific x, discrete or continuous, influence the choice variable y. 
+The discrete effect represents how a discrete change in one specific x, discrete or continuous, influence the choice variable y.
 This is more useful for categorical variables, as calculating the "marginal effect" makes little sense
-for them. In this function, we calculate the discrete effect by changing the explanatory variable from 
-its minimum to its maximum. For a binary variable, this is just the difference between 0 and 1. Similar 
+for them. In this function, we calculate the discrete effect by changing the explanatory variable from
+its minimum to its maximum. For a binary variable, this is just the difference between 0 and 1. Similar
 to the marginal effect case, we also have discrete effect at the mean (DEM), corresponding to \code{marg.type= atmean}
  and average dscrete effect (ADE), corresponding to \code{marg.type=aveacr}.
 
 Standard error is provided for the effects by using Krinsky-Robb(KR) method. Krinsky-Robb is a simulation-based
-method that calculates the empirical value of a function given a known distribution of its variables. Here 
-we provide Krinsky-Robb standard error for MEM and DEM, and the user can specify how many times of 
-simulation \code{R} should the Krinsky-Robb algorithm run. 
+method that calculates the empirical value of a function given a known distribution of its variables. Here
+we provide Krinsky-Robb standard error for MEM and DEM, and the user can specify how many times of
+simulation \code{R} should the Krinsky-Robb algorithm run.
 
 The user can also specify a subset of explanatory variables when calculating effects. This is done through
 specifying string vectors containing the column names of the explanatory variables to \code{varlist}. As the
 KR standard error can be time-consuming, it is advised to calculate only the variables in need.
 }
 \examples{
-#results1 = fmlogit(y,X)
-effects(results1,effect="marginal")
-effects(results1,effect="discrete",varlist = colnames(object$X)[c(1,3)])
+# results1 = fmlogit(y,X)
+effects(results1, effect = "marginal")
+effects(results1, effect = "discrete", varlist = colnames(object$X)[c(1, 3)])
 }
