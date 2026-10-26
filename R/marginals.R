@@ -1,212 +1,215 @@
-#' Average Partial Effects of the Covariates
+#' Partial effects of the covariates
 #'
-#' Calculate average partial effects (APE) of independent variable from a
-#'   fractional multinomial logit model.
+#' @description
+#' Calculates marginal derivatives or discrete changes in the fitted shares of
+#' a fractional multinomial logit model, at the mean design or averaged over
+#' the retained observations.
 #'
-#' @param object An "fmlogit" object.
-#' @param effect Can be "marginal", for marginal effect; or "discrete", for
-#'   discrete changes from the min to the max.
-#' @param marg.type Type of marginal or discrete effects to be computed. Default to "atmean", the effect at
-#' the mean of all covariates. Also take "aveacr", the averaged effects across all observations. See details.
-#' @param se Whether to calculate standard errors for those margins. See details.
-#' @param varlist A string vector which provides the name of variables to calculate
-#' the marginal effect. If missing, all variables except the constant will be calculated.
-#' Use "constant" if wish to compute the marginal effect of constant.
-#' @param marg.list A list of matrices storing the marginal effect matrix for each observation. Exists
-#' only if marg.type="aveacr".
-#' @param at Specify values of the X-matrix at which the partial effect will be retrieved. Expect a vector input
-#' of length K-1. Only supported for \code{marg.type="atmean"}. See \code{predict.fmlogit(newdata)}.
-#' @param R Number of times to sample for the Krinsky-Robb standard error. Default to 1000.
-#' @details This module calculates the average partial effects (APEs) from a fractional multinomial logit model.
-#' Partial effects are the counterpart of the marginal effects in a linear model setting. In linear models,
-#' usually the parameter estimate itself represents marginal effect (if the variable in question is continuous).
-#' In logit models, however, the parameter estimates at hand is the effect on log-ratio between the choice variable
-#' and the baseline variable. This function is intended to extract APEs from the
-#' coefficient estimates completed from the fractional multinomial logit models.
+#' @param object An object of class \code{"fmlogit"}.
+#' @param effect Either \code{"marginal"} for derivatives or \code{"discrete"}
+#'   for changes from the observed minimum to the observed maximum.
+#' @param marg.type Either \code{"atmean"} (the default) to evaluate effects at
+#'   the mean design, or \code{"aveacr"} to average observation-level effects.
+#' @param se Logical; compute simulation-based Krinsky-Robb standard errors?
+#' @param varlist Character vector of column names in \code{object$x}, in the
+#'   desired output order. By default, all columns except the first, intercept
+#'   column are selected. Use \code{"(Intercept)"} to select the intercept.
+#' @param at Optional finite numeric vector of length \code{K - 1}, giving the
+#'   non-intercept design values in the order of \code{colnames(object$x)[-1]}.
+#'   Only supported with \code{marg.type = "atmean"}.
+#' @param R Number of joint coefficient draws for Krinsky-Robb standard errors;
+#'   an integer of at least two when \code{se = TRUE}. Defaults to 1000.
 #'
-#' This function allows for two types of partial effects: marginal effect, and discrete effect.
-#' Marginal effect represents how a unit change in one continuous variable x may influence the choice variable y.
-#' The estimate of marginal effect is very straighforward. However, special care is needed when averaging
-#' the marginal effect across observations to acquire APE. One approach is to use the estimate of the marginal effect while setting
-#' other explanatory variables at the mean. We call this marginal effect at the mean (MEM), which corresponds
-#' to the option \code{marg.type=atmean}. Another approach is to take the average of marginal effects for each
-#' individual. We call this average marginal effect (AME), which corresponds to the option \code{marg.type=
-#' aveacr}.
+#' @details
+#' With the first outcome normalized to \eqn{\beta_1 = 0}{beta_1 = 0}, the
+#' conditional shares and their marginal derivatives are
+#' \deqn{p_{ij} = \frac{\exp(x_i' \beta_j)}{\sum_h \exp(x_i' \beta_h)},}
+#' \deqn{\frac{\partial p_{ij}}{\partial x_{ik}} =
+#'   p_{ij}\left(\beta_{jk} - \sum_h p_{ih}\beta_{hk}\right).}
+#' Discrete effects replace design column \eqn{k} by its observed minimum and
+#' maximum, keeping all other columns fixed, and subtract the resulting shares.
+#' Effects sum to zero across outcomes because the fitted shares sum to one.
 #'
-#' The discrete effect represents how a discrete change in one specific x, discrete or continuous, influence the choice variable y.
-#' This is more useful for categorical variables, as calculating the "marginal effect" makes little sense
-#' for them. In this function, we calculate the discrete effect by changing the explanatory variable from
-#' its minimum to its maximum. For a binary variable, this is just the difference between 0 and 1. Similar
-#' to the marginal effect case, we also have discrete effect at the mean (DEM), corresponding to \code{marg.type= atmean}
-#'  and average dscrete effect (ADE), corresponding to \code{marg.type=aveacr}.
+#' For \code{"atmean"}, all design columns are fixed at their arithmetic means,
+#' unless \code{at} supplies their values. For \code{"aveacr"}, the effects are
+#' computed for each retained observation and then averaged arithmetically.
+#' Estimation weights affect the fitted coefficients and their covariance;
+#' they do not reweight these means or the observed minimum and maximum.
+#' Effects refer to processed design columns. For factor indicators and
+#' interactions, changing one column does not reconstruct the original data
+#' or update related design columns.
 #'
-#' Standard error is provided for the effects by using Krinsky-Robb(KR) method. Krinsky-Robb is a simulation-based
-#' method that calculates the empirical value of a function given a known distribution of its variables. Here
-#' we provide Krinsky-Robb standard error for MEM and DEM, and the user can specify how many times of
-#' simulation \code{R} should the Krinsky-Robb algorithm run.
+#' The simulation-based Krinsky-Robb method draws the entire non-baseline
+#' coefficient vector from its estimated joint normal distribution,
+#' \eqn{\theta^{(r)} \sim N(\hat\theta, \widehat{\mathrm{Var}}(\hat\theta))}.
+#' Each draw preserves the baseline normalization and recomputes the requested
+#' effect using the same design values and averaging rule. The sample standard
+#' deviation across draws estimates the standard error. This uses
+#' \code{object$vcov_full}, including covariance between outcomes and covariates,
+#' and conditions on the observed design. Use \code{set.seed()} for reproducible
+#' simulations. The reported z statistics and two-sided p-values use a normal
+#' approximation.
 #'
-#' The user can also specify a subset of explanatory variables when calculating effects. This is done through
-#' specifying string vectors containing the column names of the explanatory variables to \code{varlist}. As the
-#' KR standard error can be time-consuming, it is advised to calculate only the variables in need.
-#'
-#' @return The function returns an object of class "fmlogit.margins". It contains the following component:
-#' @return \code{effects} A matrix of calculated effects.
-#' @return \code{se} A matrix of standard errors corresponding to the effects. Shows up if se=T for the
-#' input parameter.
-#' @return \code{ztable} A list of matrices containing effects, standard errors, z-stats and p-values.
-#' @return \code{R} Number of simulation times for Krinsky-Robb standard error calculation. Null if se=F.
-#' @return \code{expl} String message explaining the effects calculated.
+#' @return An object of class \code{"fmlogit.margins"} with:
+#' \describe{
+#' \item{effects}{A \code{J}-by-selected-covariates matrix of effects.}
+#' \item{se}{A matching matrix of standard errors, present if \code{se = TRUE}.}
+#' \item{ztable}{A named list of estimate, standard error, z statistic and p-value
+#'   tables, present if \code{se = TRUE}.}
+#' \item{marg.list}{A named list of \code{N}-by-\code{J} observation-level effect
+#'   matrices, present for \code{marg.type = "aveacr"}.}
+#' \item{R}{The number of simulation draws, or zero if \code{se = FALSE}.}
+#' \item{expl}{A brief description of the effects and inference.}
+#' }
 #'
 #' @examples
-#' # results1 = fmlogit(y,X)
-#' effects(results1, effect = "marginal")
-#' effects(results1, effect = "discrete", varlist = colnames(object$X)[c(1, 3)])
+#' x <- data.frame(income = seq(-1, 1, length.out = 30))
+#' y <- cbind(base = 0.3 + 0.05 * x$income,
+#'            other = 0.7 - 0.05 * x$income)
+#' fit <- fmlogit(y, x, print.level = 0)
+#' effects.fmlogit(fit)
+#' effects.fmlogit(fit, effect = "discrete", varlist = "income")
+#'
 #' @export effects.fmlogit
-
 effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
-                            marg.type = "atmean", se = F, varlist = NULL, at = NULL, R = 1000) {
-  j <- length(object$estimates) + 1
-  K <- dim(object$estimates[[1]])[1]
-  N <- dim(object$y)[1]
-  betamat <- object$coefficient
-  # determine variables
-  Xnames <- colnames(object$X)
-  ynames <- colnames(object$y)
-  if (length(varlist) == 0) {
-    varlist <- Xnames[-K]
-    var_colNo <- c(1:(K - 1))
-    k <- length(var_colNo)
+                            marg.type = "atmean", se = FALSE,
+                            varlist = NULL, at = NULL, R = 1000) {
+  if (!inherits(object, "fmlogit")) stop("'object' must be an fmlogit fit.")
+  effect <- match.arg(effect)
+  marg.type <- match.arg(marg.type, c("atmean", "aveacr"))
+  if (!is.logical(se) || length(se) != 1L || is.na(se)) {
+    stop("'se' must be TRUE or FALSE.")
+  }
+  if (se && (!is.numeric(R) || length(R) != 1L || !is.finite(R) ||
+             R < 2 || R != floor(R) || R > .Machine$integer.max)) {
+    stop("'R' must be an integer of at least two when 'se = TRUE'.")
+  }
+
+  # Match fmlogit(): x is N x K with the intercept first; y is N x J.
+  # theta_hat stacks K coefficients per non-baseline outcome (h = 1, ..., J-1).
+  x <- object$x
+  y <- object$y
+  N <- nrow(y)
+  J <- ncol(y)
+  K <- ncol(x)
+  d <- K * (J - 1L)
+  theta_hat <- object$raw.estimates
+  if (!is.matrix(x) || !is.numeric(x) || nrow(x) != N || K < 1L ||
+      any(!is.finite(x)) || any(x[, 1L] != 1) ||
+      !is.numeric(theta_hat) || length(theta_hat) != d ||
+      any(!is.finite(theta_hat))) {
+    stop("'object' must contain the current fmlogit design and coefficients.")
+  }
+
+  xnames <- colnames(x)
+  ynames <- colnames(y)
+  if (is.null(varlist)) varlist <- xnames[-1L]
+  if (!is.character(varlist) || !length(varlist) ||
+      anyNA(varlist) || anyDuplicated(varlist)) {
+    stop("'varlist' must select distinct covariate names; use '(Intercept)' for an intercept-only model.")
+  }
+  var_colNo <- match(varlist, xnames)
+  if (anyNA(var_colNo)) stop("Unrecognized covariate names in 'varlist'.")
+
+  if (!is.null(at) && marg.type != "atmean") {
+    stop("'at' is only supported for 'marg.type = \"atmean\"'.")
+  }
+  marg.type.out <- if (marg.type == "aveacr") {
+    "average across observations,"
+  } else if (is.null(at)) {
+    "at the mean,"
   } else {
-    var_colNo <- unlist(lapply(varlist, function(x) which(Xnames == x)))
-    if (length(varlist) != length(var_colNo)) stop("Unrecognized varlist input. Please double check your spelling")
-    k <- length(var_colNo)
+    "at the evaluation point,"
   }
-
-  xmarg <- matrix(ncol = k, nrow = j)
-  se_mat <- matrix(ncol = k, nrow = j)
-  marg_list <- list()
-
-  if (effect == "marginal") {
-    # calculate marginal effects
-    yhat <- predict(object)
-    yhat <- as.matrix(yhat)
-    for (c in var_colNo) {
-      c1 <- which(var_colNo == c)
-      if (marg.type == "aveacr") {
-        # this is the average marginal effect for all observations
-        beta_bar <- as.vector(yhat %*% betamat[, c])
-        betak_long <- matrix(rep(betamat[, c], N), nrow = N, byrow = T)
-        marg_mat <- yhat * (betak_long - beta_bar)
-        xmarg[, c1] <- colMeans(marg_mat)
-        marg_list[[c1]] <- marg_mat
-      }
-      if (marg.type == "atmean") {
-        # this is the marginal effect at the mean
-        # mean calculation
-        if (is.null(at)) at <- colMeans(object$X[, -K])
-        yhat_mean <- predict(object, newdata = at)
-        beta_bar <- sum(yhat_mean * betamat[, c])
-        betak <- betamat[, c]
-        marg_vec <- yhat_mean * (betak - beta_bar)
-        xmarg[, c1] <- as.numeric(marg_vec)
-      }
-      if (se) {
-        # se calculation, using atmean by default
-        se_k <- rep(0, j)
-        for (i in 1:j) {
-          se_k[i] <- sqrt(diag(object$vcov[[i]])[c])
-          new_betak <- stats::rnorm(R, betamat[j, c], se_k[i])
-          marg_matrix <- matrix(nrow = R, ncol = j)
-          for (r in 1:R) {
-            new_betamat <- betamat
-            new_betamat[i, c] <- new_betak[r]
-            yhat_mean <- predict(object, newdata = colMeans(object$X[, -K]), newbeta = new_betamat)
-            beta_bar <- sum(yhat_mean * new_betamat[, c])
-            betak <- new_betamat[, c]
-            marg_vec <- yhat_mean * (betak - beta_bar)
-            marg_matrix[r, i] = as.numeric(marg_vec)[i]
-          }
-          se_mat[i, c1] <- sd(marg_matrix[, i])
-        }}}}
-
-  if (effect == "discrete") {
-    for (c in var_colNo) {
-      c1 <- which(var_colNo == c)
-      if (marg.type == "aveacr") {
-        Xmin <- Xmax <- object$X[, -K]
-        Xmin[, c] <- min(object$X[, c])
-        Xmax[, c] <- max(object$X[, c])
-        yhat_min <- predict(object, newdata = Xmin)
-        yhat_max <- predict(object, newdata = Xmax)
-        ydisc <- yhat_max - yhat_min
-        xmarg[, c1] <- colMeans(ydisc)
-        marg_list[[c1]] <- ydisc
-      }
-      if (marg.type == "atmean") {
-        if (is.null(at)) at <- colMeans(object$X[, -K])
-        Xmin <- Xmax <- at
-        Xmin[c] <- min(object$X[, c])
-        Xmax[c] <- max(object$X[, c])
-        yhat_min <- predict(object, newdata = Xmin)
-        yhat_max <- predict(object, newdata = Xmax)
-        ydisc <- yhat_max - yhat_min
-        xmarg[, c1] <- as.numeric(ydisc)
-      }
-      if (se == T) {
-        # se calculation for discrete margins. using atmean by default
-        se_k <- rep(0, j)
-        Xmin <- Xmax <- colMeans(object$X[, -K])
-        Xmin[c] <- min(object$X[, c])
-        Xmax[c] <- max(object$X[, c])
-        marg_matrix <- matrix(nrow = R, ncol = j)
-        for (i in 1:j) {
-          se_k[i] <- sqrt(diag(object$vcov[[i]])[c])
-          new_betak <- stats::rnorm(R, betamat[j, c], se_k[i])
-          for (r in 1:R) {
-            new_betamat <- betamat
-            new_betamat[i, c] <- new_betak[r]
-            yhat_min <- predict(object, newdata = Xmin, newbeta = new_betamat)
-            yhat_max <- predict(object, newdata = Xmax, newbeta = new_betamat)
-            ydisc <- yhat_max - yhat_min
-            marg_matrix[r, i] <- as.numeric(ydisc)[i]
-          }
-          se_mat[i, c1] <- sd(marg_matrix[, i])
-        }}}}
-  # generating hypothesis testing tables.
-  listmat <- list()
-  if (se) {
-    for (i in 1:k) {
-      tabout <- matrix(ncol = 4, nrow = j)
-      tabout[, 1:2] <- cbind(xmarg[, i], se_mat[, i])
-      tabout[, 3] <- tabout[, 1] / tabout[, 2]
-      tabout[, 4] <- 2 * (1 - pnorm(abs(tabout[, 3])))
-      colnames(tabout) <- c("estimate", "std", "z", "p-value")
-      rownames(tabout) <- ynames
-      listmat[[i]] <- tabout
+  x_eval <- x
+  if (marg.type == "atmean") {
+    if (is.null(at)) at <- colMeans(x[, -1L, drop = FALSE])
+    if (!is.numeric(at) || !is.null(dim(at)) || length(at) != K - 1L ||
+        any(!is.finite(at))) {
+      stop("'at' must be a finite numeric vector of length K - 1, excluding the intercept.")
     }
-    names(listmat) <- varlist
+    x_eval <- matrix(c(1, at), nrow = 1L, dimnames = list(NULL, xnames))
   }
 
+  # Evaluate the same statistic for the fitted coefficients and every KR draw.
+  evaluate <- function(theta, keep = FALSE) {
+    xmarg <- matrix(NA_real_, J, length(var_colNo),
+                    dimnames = list(ynames, varlist))
+    marg_list <- if (keep) stats::setNames(vector("list", length(varlist)), varlist) else NULL
+    if (effect == "marginal") {
+      # p_ij = exp(x_i' beta_j) / sum_h exp(x_i' beta_h), beta_1 = 0.
+      # Reuse the estimator's stable softmax rather than exponentiating directly.
+      p <- softmax(theta, x_eval, J)$probabilities
+    }
+    for (k in var_colNo) {
+      if (effect == "marginal") {
+        # dp_ij/dx_ik = p_ij (beta_jk - sum_h p_ih beta_hk).
+        # Every K-th element selects covariate k in alternative-major order.
+        beta_k <- c(0, theta[seq.int(k, d, by = K)])
+        beta_bar <- as.vector(p %*% beta_k)
+        marg_mat <- sweep(p, 2L, beta_k, FUN = "*") - p * beta_bar
+      } else {
+        # Delta_ijk = p_j(x_i with x_ik = max x_k)
+        #             - p_j(x_i with x_ik = min x_k).
+        x_min <- x_max <- x_eval
+        x_min[, k] <- min(x[, k])
+        x_max[, k] <- max(x[, k])
+        marg_mat <- softmax(theta, x_max, J)$probabilities -
+          softmax(theta, x_min, J)$probabilities
+      }
+      dimnames(marg_mat) <- list(rownames(x_eval), ynames)
+      xmarg[, xnames[k]] <- colMeans(marg_mat)
+      if (keep) marg_list[[xnames[k]]] <- marg_mat
+    }
+    list(effects = xmarg, marg.list = marg_list)
+  }
 
-  colnames(xmarg) <- colnames(se_mat) <- varlist
-  rownames(xmarg) <- rownames(se_mat) <- colnames(object$y)
-  outlist <- list()
-  outlist$effects <- xmarg
+  result <- evaluate(theta_hat, keep = marg.type == "aveacr")
+  outlist <- list(effects = result$effects)
   if (se) {
+    v <- object$vcov_full
+    if (!is.matrix(v) || !is.numeric(v) || !identical(dim(v), c(d, d)) ||
+        any(!is.finite(v)) || !isSymmetric(v, tol = 1e-8)) {
+      stop("'object$vcov_full' must be a finite, symmetric d-by-d joint covariance matrix.")
+    }
+    # A symmetric eigen square root also permits singular HC0 covariance.
+    # Clip only round-off negatives; materially negative eigenvalues are invalid.
+    v <- (v + t(v)) / 2
+    ee <- eigen(v, symmetric = TRUE)
+    tol <- 1e-8 * max(abs(ee$values))
+    if (any(ee$values < -tol)) {
+      stop("The joint covariance matrix must be positive semidefinite.")
+    }
+    root <- sweep(ee$vectors, 2L, sqrt(pmax(ee$values, 0)), FUN = "*")
+
+    # Simulation-based Krinsky-Robb inference:
+    # theta^(r) = theta_hat + root z^(r), z^(r) ~ N(0, I_d).
+    # Joint draws retain all cross-coefficient covariance and beta_1 = 0.
+    theta_draws <- sweep(matrix(stats::rnorm(R * d), nrow = R) %*% t(root),
+                         2L, theta_hat, FUN = "+")
+    marg_draws <- matrix(NA_real_, R, length(outlist$effects))
+    for (r in seq_len(R)) {
+      marg_draws[r, ] <- evaluate(theta_draws[r, ])$effects
+    }
+    # se(g) = sqrt(sum_r (g(theta^(r)) - mean_r g(theta^(r)))^2 / (R - 1)).
+    se_mat <- matrix(apply(marg_draws, 2L, stats::sd), J, length(var_colNo),
+                     dimnames = dimnames(outlist$effects))
+    tabout <- lapply(varlist, function(variable) {
+      est <- outlist$effects[, variable]
+      std <- se_mat[, variable]
+      z <- est / std
+      cbind(estimate = est, std = std, z = z,
+            "p-value" = 2 * stats::pnorm(abs(z), lower.tail = FALSE))
+    })
+    names(tabout) <- varlist
     outlist$se <- se_mat
-    outlist$ztable <- listmat
+    outlist$ztable <- tabout
   }
-  if (marg.type == "aveacr") {
-    names(marg_list) <- varlist
-    outlist$marg.list <- marg_list
-  }
-  marg.type.out <- ifelse(marg.type == "atmean", "at the mean,", "average across observations,")
-
-  # please include this in the file
-  outlist$R <- ifelse(se, R, 0)
-  # please
-
-  outlist$expl <- paste(effect, "effect", marg.type.out,
-    ifelse(se, "Krinsky-Robb standard error calculated", "standard error not computed"))
-  return(structure(outlist, class = "fmlogit.margins"))
+  if (marg.type == "aveacr") outlist$marg.list <- result$marg.list
+  outlist$R <- if (se) R else 0
+  outlist$expl <- paste(
+    effect, "effect", marg.type.out,
+    if (se) "Krinsky-Robb standard error calculated" else "standard error not computed"
+  )
+  structure(outlist, class = "fmlogit.margins")
 }
