@@ -2,14 +2,37 @@
 % Please edit documentation in R/fmlogit.R
 \name{initEst}
 \alias{initEst}
-\title{Find good initial values for fmlogit}
+\title{Obtain pairwise fractional-logit starting values}
 \usage{
 initEst(y, x, weights = NULL)
 }
+\arguments{
+\item{y}{Numeric N-by-J matrix of observed shares, with J >= 2.
+Each row must sum to one.}
+
+\item{x}{Numeric N-by-K *design matrix*, including a column of ones first.
+The columns must have the same order used during joint estimation.}
+
+\item{weights}{Optional vector of N nonnegative observation weights.}
+}
+\value{
+Named numeric vector of length (J - 1) * K. Coefficients are grouped
+  by non-baseline alternative; the baseline coefficients are omitted.
+}
 \description{
-Run pairwise fractional logits of \eqn{y_j / (y_1 + y_j)}{y_j / (y_1 + y_j)}.
+Fits a separate, share-weighted fractional binary logit for each non-baseline
+outcome against the first outcome. These estimators target the multinomial
+conditional-mean coefficients under correct specification, but are generally
+not identical to the joint fractional multinomial QMLE in finite samples.
 }
 \details{
+For alternative j > 1, fit a fractional binary logit with response
+\eqn{y_j / (y_1 + y_j)}{y_j / (y_1 + y_j)}, and prior weights
+\eqn{w (y_1 + y_j)}{w * (y_1 + y_j)}.
+Observations with \eqn{y_1 + y_j = 0}{y_1 + y_j = 0} make no contribution.
+In the event of failed or non-finite pairwise estimates, the corresponding
+coefficient block is initialized to zero (with a warning).
+
 The reasonable initial value comes from `J-1` separate weighted binary-logit
 regressions, each comparing one alternative with the baseline alternative.
 Since the normalisation is such that the first `K` elements are zeros (and
@@ -22,5 +45,12 @@ Substituting the multinomial-logit probabilities gives
 \Lambda(x_i' \beta_j)}{pi_ij = exp(x_i' beta_j) / (1 + exp(x_i' beta_j)) =
 Lambda(x_i' beta_j)}.
 This is a pairwise application of the fractional quasi-likelihood logic in
-Papke and Wooldridge (1996) and Mullahy (2015).
+\insertCite{papke1996econometric}{fmlogit} and
+\insertCite{mullahy2015multivariate}{fmlogit}.
+}
+\references{
+\insertAllCited{}
+}
+\seealso{
+[fmlogit()]
 }

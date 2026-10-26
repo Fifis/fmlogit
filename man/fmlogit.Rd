@@ -2,126 +2,81 @@
 % Please edit documentation in R/fmlogit.R
 \name{fmlogit}
 \alias{fmlogit}
-\title{Estimate Fractional Multinomial Logit Models}
+\title{Estimate a fractional multinomial logit model}
 \usage{
 fmlogit(
   y,
   x,
   weights = NULL,
   beta0 = NULL,
-  method = "CG",
-  iterlim = 5e+05,
-  abstol = 1e-05,
-  print.level = 1,
+  method = "BHHH",
+  iterlim = 2000L,
+  reltol = 1e-08,
+  print.level = 1L,
   ...
 )
 }
 \arguments{
-\item{y}{the dependent variable (N*J). Can be a matrix or a named data frame.
-The first column of the matrix is automatically treated as the baseline.}
+\item{y}{Numeric N-by-J matrix or data frame of observed shares, `J >= 2`.
+Values must lie in [0, 1] and rows must sum to one.
+The first column is automatically treated as the baseline.}
 
-\item{x}{independent variable (N*K). Can be a matrix or a named data frame.
-An intercept term is automatically added.}
+\item{x}{`N`-row matrix or data frame of regressors. Numeric, factor, and
+character columns are allowed in data frames. An intercept is added
+automatically as the first column. Any supplied constant columns are
+removed before creating the design matrix. No variable selection is done.}
 
-\item{weights}{Observation (survey) weights denoting the relative importance
-of observations. Defaults to equal weights (a vector of ones).}
+\item{weights}{Optional non-negative observation weights, length `N`. The
+default is equal weights. These are relative sampling weights that multiply
+individual pseudo-likelihood values. Their behaviour is similar to
+the `weights` argument in `lm()`.}
 
-\item{beta0}{Initial value for the coefficient vector used in optimization.
-Default to a vector of smart values built from individual `J-1` estimated
-equations (via `glm()`), concatenated one after another.}
+\item{beta0}{Optional starting coefficients, length `(J-1) * K`, where `K` is
+the number of columns in the *processed* design matrix including the
+intercept. Ordered by alternative, with the intercept first in each block.
+If NULL, use pairwise fractional binary logits from [initEst()].}
 
-\item{method}{Method of optimization. Passed to `maxLik()`.
-Choose from "NR", "BFGS", "CG", "BHHH", "SANN",or "NM". Default to "CG",
-the conjugate gradients method. See Details.}
+\item{method}{Optimiser for [maxLik::maxLik()]; default "BHHH". Use "CG"
+if the estimation is very slow.}
 
-\item{iterlim}{Maximum number of iterations.}
+\item{iterlim}{Positive iteration limit passed to `maxLik()`.}
 
-\item{abstol}{Absolute convergence tolerance.}
+\item{reltol}{Positive relative convergence tolerance passed to `maxLik()`.}
 
-\item{print.level}{Integer: optimiser verbosity. `0` silences the output,
-`1` prints the initial and final details, `2` prints each iteration's
-output.}
+\item{print.level}{Optimiser verbosity; default 1 (short output).}
 
-\item{...}{additional parameters passed to \code{maxLik()}}
+\item{...}{Additional arguments forwarded to [maxLik::maxLik()].}
 }
 \value{
-The function returns an object of class "fmlogit". Use
-  \code{effects}, \code{predict}, \code{residual}, \code{fitted} to extract
-  various useful features of the value returned by \code{fmlogit}.
-
-An object of class "fmlogit" contains the following components:
-
-\code{estimates}   A list of matrices containing parameter estimates,
-  standard errors, and hypothesis testing results.
-
-\code{baseline}    The baseline choice
-
-\code{likelihood}  The likelihood value
-
-\code{conv_code}   Convergence diagnostics code.
-
-\code{convergence} Convergence messages.
-
-\code{count}       Provides dataset information
-
-\code{y}           The dependent variable data frame.
-
-\code{x}           The independent variable data frame. Augmented by
-  factor dummy transformation, constant term added.
-
-\code{rowNo}       A vector of row numbers from the original `x` and
-  `y` that is used for estimation.
-
-\code{coefficient} Matrix of estimated coefficients. Augmented with
-  the baseline coefficient (which is a vector of zeros).
-
-\code{vcov} A list of matrices containing the robust
-  variance-covariance matrix for each choice variable.
+An object of class "fmlogit". The existing fields `raw.estimates`,
+  `estimates`, `baseline`, `likelihood`, `conv_code`, `convergence`,
+  `count`, `y`, `x`, `weights`, `rowNo`, and `coefficient` are retained.
+  `coefficient` is J-by-K, with an all-zero first row.
+  `vcov_full` is the complete `K(J-1)`-by-`K(J-1)` joint HC0 covariance matrix.
+  `vcov` is a legacy list of J diagonal blocks of `vcov_full`, with a zero
+  block for the normalized baseline (cross-category blocks are only in
+  `vcov_full`). `fitted.values` holds the `N`-by-`J` predicted shares.
 }
 \description{
-Used to estimate fractional multinomial logit models using quasi-maximum
-likelihood estimations following Papke and Wooldridge(1996).
+Estimates a multinomial-logit conditional-mean model for compositional
+outcomes by maximizing the weighted multinomial *quasi*-log-likelihood.
+The first outcome is the reference category. Robust standard errors are
+computed using the full joint, observation-level sandwich covariance matrix.
 }
 \details{
-The fractional multinomial model is the expansion of the multinomial
-logit to fractional responses. Unlike standard multinomial logit models,
-which only considers 0-1 respones, fractional multinomial model considers the
-case where the response variable is fractions that sums up to one. Examples
-of these type of data are, percentages of budget spent in education, defense,
-public health; fractions of a population that have middle school, high
-school, college, or post college education, etc.
-
-This function follows Papke and Wooldridge(1996)'s paper, in which they
-proposed a quasi-maximum likelihood estimator for fractional response data.
-The likelihood function used here is a standard multinomial likelihood
-function, see \url{http://maartenbuis.nl/software/likelihoodFmlogit.pdf} for
-the likelihood used here. Robust standard errors are provided following Papke
-and Wooldridge (1996), in which they proposed an asymptotically consistent
-estimator of variance.
-
-Maximization is done by calling \code{\link{maxLik}}. `maxLik` is a wrapper
-function for different maximization methods in R. This include most methods
-provided by \code{\link{maxLik}},  but also other methods such as BHHH
-(Berndt--Hall--Hall--Hausman).
-
-
-MLE convergence can be a problem in R, especially if the data size is large
-with many explanatory variables. It is recommended to call CG (Conjugate
-Gradients) or BHHH (Berndt-Hall-Hall-Hausman). Conjugate gradients method is
-usually faster, but could lead to non-convergence under certain scenarios.
-BHHH is slower, but has better convergence performance.
-}
-\examples{
-data <- spending
-x <- data[,2:5]
-y <- data[,6:11]
-results1 <- fmlogit(y,x)
-print(results1)
-summary(results1
-)
+For the first, reference category, \eqn{\beta_1 = 0}{beta_1 = 0}.
+The conditional means are
+\eqn{p_{ij} = \exp(x_i' \beta_j) / \sum_h \exp(x_i' \beta_h)}{p_ij = exp(x_i' beta_j) / sum_h exp(x_i' beta_h)}.
+The objective is \eqn{\sum_i w_i \sum_j y_{ij} \log p_ij}{sum_i w_i sum_j y_ij log(p_ij)},
+as per \insertCite{mullahy2015multivariate}{fmlogit}.
+The joint HC0 covariance uses the inverse weighted negative Hessian as
+bread and the outer product of the weighted *full* scores as meat.
+This is an independent-observation sandwich estimator: weights alone do not
+account for survey clusters, strata, or finite-population corrections
+\insertCite{papke1996econometric}{fmlogit}.
+Rows with missing responses/covariates are removed before estimation;
+the input weights are subset using exactly the same row indices.
 }
 \references{
-Papke, L. E. and Wooldridge, J. M. (1996), Econometric methods
-  for fractional response variables with an application to 401(k) plan
-  participation rates. J. Appl. Econ., 11: 619-632.
+\insertAllCited{}
 }

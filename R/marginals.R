@@ -110,12 +110,12 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
         marg_vec <- yhat_mean * (betak - beta_bar)
         xmarg[, c1] <- as.numeric(marg_vec)
       }
-      if (se == T) {
+      if (se) {
         # se calculation, using atmean by default
         se_k <- rep(0, j)
         for (i in 1:j) {
           se_k[i] <- sqrt(diag(object$vcov[[i]])[c])
-          new_betak <- rnorm(R, betamat[j, c], se_k[i])
+          new_betak <- stats::rnorm(R, betamat[j, c], se_k[i])
           marg_matrix <- matrix(nrow = R, ncol = j)
           for (r in 1:R) {
             new_betamat <- betamat
@@ -161,7 +161,7 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
         marg_matrix <- matrix(nrow = R, ncol = j)
         for (i in 1:j) {
           se_k[i] <- sqrt(diag(object$vcov[[i]])[c])
-          new_betak <- rnorm(R, betamat[j, c], se_k[i])
+          new_betak <- stats::rnorm(R, betamat[j, c], se_k[i])
           for (r in 1:R) {
             new_betamat <- betamat
             new_betamat[i, c] <- new_betak[r]
