@@ -105,3 +105,30 @@ test_that("The joint HC0 covariance matches a numerical Hessian", {
   V_num <- H_inv %*% crossprod(scores) %*% H_inv
   expect_equal(unname(fit$vcov_full), unname(V_num), tolerance = 1e-4)
 })
+
+test_that("Fitted shares and response residuals are consistent", {
+  s <- simulatedShares(n = 300L)
+  fit <- fmlogit(s$y1, s$x, print.level = 0L)
+  p <- as.matrix(fitted(fit))
+  expect_equal(p, fit$fitted.values)
+  expect_equal(as.matrix(predict(fit)), p)
+  expect_equal(as.matrix(residuals(fit)), fit$y - p)
+  expect_equal(as.numeric(rowSums(residuals(fit))), rep(0, nrow(fit$y)),
+               tolerance = 1e-12)
+})
+
+test_that("Predictions recover known multinomial shares and honor new coefficients", {
+  s <- simulatedShares(n = 300L)
+  fit <- fmlogit(s$y2, s$x, print.level = 0L)
+  newdata <- s$x[1:3, -1L, drop = FALSE]
+  p <- predict(fit, newdata = newdata, newbeta = s$beta)
+  expect_equal(unname(as.matrix(p)), unname(s$p[1:3, ]), tolerance = 1e-12)
+
+  p <- predict(fit, newdata = newdata[1L, ], newbeta = s$beta)
+  expect_equal(as.numeric(p[1L, ]), as.numeric(s$p[1L, ]), tolerance = 1e-12)
+
+  # All-zero coefficients imply equal shares, including without newdata.
+  p <- predict(fit, newbeta = 0 * fit$coefficient)
+  expect_equal(unname(as.matrix(p)), matrix(1 / 3, nrow(fit$y), 3L),
+               tolerance = 1e-12)
+})
