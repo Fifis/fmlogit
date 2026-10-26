@@ -1,85 +1,455 @@
----
-title: "The fmlogit Package: A Light Document"
-author: "Xinde James Ji" 
-date: "Oct 10, 2016"
-output: pdf_document
----
+# fmlogit
 
-This document provides an overview of the fmlogit package in R. Updates will be published at [my github site](https://github.com/f1kidd/fmlogit). Any suggestions or concerns are welcome. 
+**Fractional multinomial logit for shares that add up to one.**
 
-# What is the fractional multinomial logit model?
-Fractional multinomial logit models estimate fractional responses by modelling the dependent variables as fractions using multinomial logits. It is the preferred model when the true data generation process is indeed fractions of multiple choices. Fractional responses arise naturally in various settings. For example, a municipality allocates its budget across multiple departments, and we are interested in the proportion of the budget that each department receives. Or, there are multiple candidates in a presendential election, and we are interested in explaining the percentage of support for each candidate in each state. 
+The `fmlogit` package estimates how covariates relate to the allocation of a
+total across several categories. It provides fitted shares, marginal and
+discrete effects, robust inference, and lightweight plots.
 
-The model is distinct in that: 1) each of the responses lies between 0 and 1, and 2) the share of all responses adds up to one. The fmlogit model uses these two distinct factors, and models them explicitly. 
+The main methodological reference is
+[Mullahy (2015)](https://doi.org/10.1515/jem-2012-0006).
+[Wulff’s guide](https://doi.org/10.1177/1094428114560024)
+to interpreting multinomial logit results
+explains why predicted outcomes and partial effects are useful alongside
+coefficient tables.
 
-# How to install fmlogit
-Type the following code into your R console:
-```R
-require(devtools)
-install_github("f1kidd/fmlogit")
+## What is the fractional multinomial logit model?
+
+Many outcomes describe how a resource is divided: a household’s spending
+across goods, a portfolio across asset classes, or a day across activities.
+Each observation contains several shares, each between zero and one, with a
+total of one. A person may allocate time to several activities on the same
+day, producing shares such as 0.5, 0.3, and 0.2.
+
+The model describes the **conditional mean** of each share: the average
+allocation among observations with given covariate values. With observation
+`i`, category `j`, and `J` categories, its mean function is
+
+$$
+p_{ij} = E(y_{ij} \mid x_i) = \frac{\exp(x_i' \beta_j)}{\sum_{h=1}^{J} \exp(x_i' \beta_h)},
+\qquad \beta_1 = 0.
+$$
+
+Here `x_i` contains the covariates and an intercept. All categories enter the
+same denominator, which makes their fitted shares add up to one. The first
+category is the reference, or baseline; its coefficients are set to zero
+to identify the model. Its fitted share and partial effects are still
+estimated and can be substantial.
+
+Observed shares may be exactly zero or one. They can be used directly,
+without replacing zeros by small positive numbers or taking logarithms of
+the observed shares. For finite coefficients, fitted conditional means are
+strictly inside the unit interval. Accepting observed zeros does not mean
+the model estimates the probability that a share is exactly zero.
+
+The model follows the fractional-response approach of Papke and Wooldridge,
+extended to a system of shares by Mullahy. It specifies conditional means
+without requiring a complete distribution for the shares. Its consistency
+still relies on a correctly specified mean function and the usual
+identification and sampling conditions.
+
+## How to install fmlogit
+
+Install the development version from the current repository:
+
+```r
+install.packages("remotes")
+remotes::install_github("Fifis/fmlogit")
 library(fmlogit)
 ```
 
-# Why do we need fmlogit in R? 
-Don't we already have an fmlogit module in Stata? Yes, and you are very welcome to [check that out](http://maartenbuis.nl/software/fmlogit.html) if you can afford a Stata license. 
+### A small example
 
-However, this package offers several advantages over Stata's fmlogit module, namely:
-### 1. Integration with the R Platform
-Implementating the model in R offers the opportunity to integrate the whole empirical process within a free, open-source platform. With the help of numerous R packages, everything can be accomplished in a single environment including data processing, estimation, post-estimation, and final manuscript writing. This is a huge advantage over stata. 
+The following example generates shares for three activities, with a
+continuous income index and a binary urban indicator. Simulated counts
+provide a convenient way to construct the example shares; the estimator
+also accepts shares without an underlying count denominator.
 
-### 2. Post-estimation improvements
-The marginal effect estimation in this package is much faster than Stata's fmlogit package. In this package user can specify which variable(s), and what type of partial effect to be calculated. This results in a huge gain in running time for the post-estimation commands. 
+```r
+set.seed(123)
+n <- 300
+x <- data.frame(income = rnorm(n), urban = rbinom(n, 1, 0.4))
 
-Also, this package allows hypothesis testing for marginal and discrete effects while Stata does not. The standard error is calculated via Krinsky-Robb method, which allows empirical hypothesis testing without knowing the underlying distribution of the effects. 
+eta <- cbind(
+  home = 0,
+  travel = 0.4 + 0.8 * x$income - 0.3 * x$urban,
+  other = -0.2 - 0.5 * x$income + 0.6 * x$urban
+)
+p <- exp(eta)
+p <- p / rowSums(p)
+
+y <- t(vapply(seq_len(n), function(i) {
+  as.numeric(rmultinom(1, size = 20, prob = p[i, ])) / 20
+}, numeric(3)))
+colnames(y) <- colnames(p)
+
+fit <- fmlogit(y, x, print.level = 0)
+summary(fit)
+head(fitted(fit))
+```
+
+The rows of `y` are observations and its columns are outcome shares.
+The rows of `x` describe the same observations. Here `home` is the
+baseline because it is the first column of `y`.
+
+## Why use fmlogit in R?
+
+### 1. Integration with the R workflow
+
+Estimation, prediction, effect summaries, and plots can be kept in the same
+R analysis. Standard methods such as `summary()`, `fitted()`,
+`residuals()`, `predict()`, and `vcov()` provide access to the results.
+Plots use base R graphics and can return their underlying data for further
+analysis.
+
+### 2. Post-estimation on the share scale
+
+A coefficient table describes relative-share parameters. Partial effects
+translate those parameters into changes in expected shares, which are often
+easier to interpret. You can select the covariates of interest, distinguish
+derivatives from discrete changes, evaluate effects at a chosen profile,
+or average them over the observed sample.
+
+Uncertainty for these effects is available through joint coefficient
+simulation. This supports summaries of effect estimates, standard errors,
+z statistics, and p-values. Plotting individual effects can also reveal
+variation that a single average hides.
 
 ### 3. Estimation flexibility
-This package allows factor variable inputs, and automatically transform it into dummy variables. This is not (explicitly) allowed in Stata. 
 
-### 4. Extensions
-This package also allows the user to easily calculate and infer the "average aggregate partial effect" given a user-specified weight scheme. This is done through linearly aggregating the attribute of each choice (e.g., expected profit/utility of each choice) with the calculated APE. 
+The covariate input can be a matrix or a data frame. Data-frame factors and
+character variables are converted to design columns during fitting.
+An intercept is added as the first design column, and supplied constant
+columns are removed. Other redundant columns cause a rank-deficiency
+error, so the design still needs to identify the model.
 
-# How does the estimator work?
-The estimator used here is an extension of that used in [Papke and Wooldridge (1996)](http://onlinelibrary.wiley.com.ezproxy.lib.utexas.edu/doi/10.1002/(SICI)1099-1255(199611)11:6%3C619::AID-JAE418%3E3.0.CO;2-1/abstract). There, they proposed a quasi-maximum likelihood(QMLE) estimator for fractional response variables. As their approach applies to binary response variables, here we expand it to a multinomial response variables with fractional structure. 
+Optional nonnegative observation weights enter both estimation and its
+robust covariance calculation. Optimisation is handled by `maxLik`, with
+several methods available.
 
-The steps involved in calculating the estimator are as follows: 
-## Step 1. Construct the multinomial logit likelihood
-This step is straightforward. A simple multinomial logit transformation will do the job. For detailed derivations and formula, please see the technical document [here](https://github.com/f1kidd/fmlogit/blob/master/Documentation/fmlogit_docs.pdf) where I explain the econometric steps in detail.  
-## Step 2. Maximize the sum of the log likelihood function
-Generally, R is not the most efficient scientific computing machine that exists, and that is the tradeoff we have to face. Here, the program offers several maximization methods provided in the *maxLik* package. The recommended algorithm is either conjugate gradients (CG), or Berndt-Hall-Hall-Hausman (BHHH). For a large dataset it may take a while (running for one hour is entirely possible, so don't terminate the program prematurely).
-## step 3. Calculate robust standard error
-Here the program follows Papke & Wooldridge (1996), and construcst the robust standard error estimator for the parameters. The program also offers a simple z-test for parameters based on the standard error. 
+### 4. Aggregates with user-supplied values
 
-# How do the post-estimation commands work?
-Calculating partial effects for limited dependent variables can be tricky, and this is especially true for multinomial logit models. The coefficients obtained in the regression model represent the logit-transformed odds ratio for that specific choice against the baseline choice. This is not intuitive at all in terms of actual effects on that specific choice. The bottom line is, the coefficients and standard errors obtained in the original models are not the basis for evaluating hypotheses. 
+Sometimes a change in allocation is useful to express as a weighted total.
+For example, categories may have different costs, returns, or external
+valuations. The `wtp()` function multiplies their share effects by values
+you supply and adds the results. The interpretation and units depend on
+those supplied values; details and the current inference limitation are
+given below.
 
-##  Marginal and discrete effects
-Instead, researchers need to compute what are called the "partial effects", as we usually do in linear models. However, the partial effect in logit-type models is tricky because the effects are heterogeneous across different observations. In other word, each unique observation have a different set of partial effects.
- 
-We provide two types of partial effects: marginal and discrete. The marginal effect represents how a unit change in one variable k changes the value in choice j, i.e., $\frac{\partial x_k}{\partial y_j}$. The discrete effect represents how a discrete change in variable k, usually from the minimum to the maximum, changes the value in choice j, i.e., $\hat{y}_{j,x_k=1}-\hat{y}_{j,x_k=0}$. 
+## How does the estimator work?
 
-Typically, two types of aggregation measures are used to illustrate the global APE: one is the partial effects at the mean (PEM), which is the partial effect of variable k when every other variables are set at their mean ; and the other is partial effect of the average (PEA), which is the average of partial effect for all observations. We allow both of the two options to be specified. 
+### Step 1. Specify the joint conditional means
 
-A more inclusive approach will be to plot the marginal effect of interest across all individuals. This is not provided in the function, but can certainly be implemented in future developments. Another possibility will be to calculate the so-called locally averaged treatment effect (LATE), where the effect of interest will be centered around a certain range of values.  
+The logit mean function respects both the unit-interval bounds and the
+requirement that shares add up to one. Estimating separate fractional-logit
+equations for each category would not generally impose that common total.
 
-## Standard Errors for APEs
-Here we adopt the simulation-based Krinsky-Robb method to compute standard errors for marginal and discrete effects as opposed to the empirical delta method used in Stata. These two methods should be asymptotically equivalent. However, using Krinsky-Robb allow us to perform hypothesis testing on the effects, while Delta method cannot accomplish that.
+The estimation objective adds up each observed share multiplied by the log
+of its fitted share, across categories and observations. Observation weights
+multiply these contributions when supplied. This is a multinomial
+**quasi-log-likelihood**: the observed shares enter where a categorical
+multinomial logit model would use zero-or-one outcome indicators.
 
-Hypothesis testing is done using the standard normal z-test by treating the APE estimates as normally distributed. The approach is very simple: say we test $H_0: D_j=0$. We just need to compare 0 with our N draws, and see if it falls out of the 95% mass. This is a major advantage we provide here compared to Stata's fmlogit module. 
+Consequently, fitting the model does not require the observed allocation
+to be a single categorical choice. It also does not require shares to be
+independent of one another. Their adding-up constraint already links them.
 
-# Practical Concerns
-One of the concerns for the package is the computation speed of the estimation process. The maximization process can take somewhere from 20 seconds to 1 hour, depending on how large the dataset is. This is certainly a limitation. This is the inherent drawback of R's computation speed, and I can do nothing about that. 
+### Step 2. Maximise the quasi-log-likelihood
 
-However, the loss in estimation will certainly be compensated in the post-estimation process. Stata's dfmlogit command is very slow (takes somewhere between 5-60 minutes), while here the effects calculation takes seconds to complete. 
+Pairwise fractional-logit fits against the baseline supply starting values;
+zero coefficients are used if they give a better initial objective. The
+estimator then optimises the full joint objective. With `J` outcomes and `K`
+design columns including the intercept, there are `(J - 1) * K` free
+coefficients.
 
-# References
-Papke, L. E. and Wooldridge, J. M. (1996), Econometric methods for fractional response variables with an application to 401(k) plan participation rates. J. Appl. Econ., 11: 619-632.
+The default optimiser is `"BHHH"`. Other supported `maxLik` methods,
+such as `"BFGS"` or `"CG"`, can be selected through `method`.
+Inspect `fit$convergence` and `fit$conv_code` when assessing the result.
+Runtime depends on sample size, the number of coefficients, scaling, and
+convergence; there is no general timing guarantee.
 
-Wulff, Jesper N. "Interpreting Results From the Multinomial Logit Model Demonstrated by Foreign Market Entry." Organizational Research Methods (2014): 1094428114560024.
+### Step 3. Compute robust standard errors
 
-Mullahy, J., 2015. Multivariate fractional regression estimation of econometric share models. Journal of Econometric Methods 4(1), 71-100.
+The package computes an HC0 sandwich covariance matrix for the full joint
+coefficient vector, using observation-level scores and the weighted
+Hessian. This retains covariance between coefficients for different
+outcomes, which matters for joint inference.
 
+Mullahy explains why ordinary multinomial-logit inverse-Hessian standard
+errors are generally unsuitable for fractional shares. Shares can be less
+variable than categorical outcomes with the same conditional means, so
+robust standard errors need not be larger than conventional ones.
 
+Use `vcov(fit)` to obtain the full joint covariance matrix. The sandwich
+calculation allows the conditional variance to differ from the nominal
+multinomial variance, while the conditional-mean specification remains
+an important assumption.
 
+## How do the post-estimation commands work?
 
+### Reading coefficients
 
+For a covariate entering linearly, its coefficient for a non-baseline
+category describes the change per unit in the log ratio of that category’s
+expected share to the baseline category’s expected share. The intercept
+gives this log ratio when the other design columns are zero. These
+coefficients do not directly give percentage-point changes in shares.
 
+In particular, a positive coefficient does not guarantee a positive
+marginal effect on that category’s expected share. Other categories also
+respond to the covariate and enter the common denominator. Coefficient
+tests are useful for hypotheses about these relative-share parameters;
+hypotheses about share changes require inference for the corresponding
+partial effects.
+
+Changing the reference category changes the coefficient representation,
+while fitted shares and their partial effects are invariant to that
+normalisation.
+
+### Marginal and discrete effects
+
+For a continuous design variable, the marginal effect is the local slope
+of the fitted share:
+
+$$
+\frac{\partial p_{ij}}{\partial x_{ik}}
+= p_{ij}\left(\beta_{jk} -
+  \sum_{h=1}^{J} p_{ih}\beta_{hk}\right).
+$$
+
+The formula shows why the effect depends on the whole model and the
+covariate profile, rather than on one coefficient alone. An effect of
+`0.02` means a local increase of two percentage points per unit of the
+covariate. It is a slope; a large finite change may have a different
+average slope.
+
+A **discrete effect** compares fitted shares at two covariate values. The
+package changes the selected design column from its observed minimum to
+its observed maximum while holding other columns fixed. For an observed
+zero-or-one variable, this is the change from zero to one.
+
+For either kind of effect, the changes across all outcome categories sum
+to zero. A gain in one share must be offset by losses elsewhere in the
+allocation.
+
+### Effects at the mean and average effects
+
+Two summaries answer different questions:
+
+| Option | Calculation | Interpretation |
+| --- | --- | --- |
+| `marg.type = "atmean"` | Use the mean design profile, replacing the selected column by its endpoints for a discrete effect. | The effect at one reference profile. |
+| `marg.type = "aveacr"` | Evaluate effects for each retained observation, then take their arithmetic average. | The average effect across the observed profiles. |
+
+The default is `"atmean"`. In a nonlinear model, the effect at the mean
+generally differs from the mean of the effects. A mean profile can also
+contain fractional values of binary variables and need not describe an
+actual observation. Wulff discusses why both summaries can be informative
+and why either can hide important variation.
+
+For example, calculate average marginal effects of the income index and
+average discrete changes in the urban indicator:
+
+```r
+set.seed(123)
+ame <- effects.fmlogit(
+  fit, effect = "marginal", marg.type = "aveacr",
+  varlist = "income", se = TRUE, R = 1000
+)
+summary(ame)
+
+urban_change <- effects.fmlogit(
+  fit, effect = "discrete", marg.type = "aveacr", varlist = "urban"
+)
+urban_change$effects
+```
+
+With `marg.type = "atmean"`, `at` supplies a custom reference profile:
+
+```r
+at <- colMeans(fit$x[, -1, drop = FALSE])
+at["income"] <- 0
+effects.fmlogit(fit, varlist = "income", at = at)$effects
+```
+
+The values in `at` must follow the non-intercept column order of
+`fit$x`. For multi-level factors or interactions, a change in one design
+column may not represent a valid change in the original variable. Use
+compatible covariate profiles and update all related design columns when
+constructing such comparisons. Derivatives of a raw variable that also
+enters through powers or interactions require accounting for those terms.
+
+### Predictions and plots
+
+Predictions describe expected share levels; marginal effects describe
+their slopes. Looking at both helps avoid confusing a large share with a
+large effect, or a declining positive slope with a declining share.
+
+```r
+newdata <- data.frame(income = c(-0.5, 0.5), urban = c(0, 1))
+predict(fit, newdata = newdata)
+head(residuals(fit))
+```
+
+For new observations, `predict()` expects the processed, numeric design
+columns in the order of `colnames(fit$x)[-1]`, with the intercept
+excluded. Factors must already be encoded into the same design columns.
+The simple example above has only numeric covariates.
+
+Following Wulff’s emphasis on graphical interpretation, inspect how
+effects vary across observations or meaningful covariate values. The
+margins plot uses the observation-level matrices saved by
+`marg.type = "aveacr"`:
+
+```r
+plot(ame, x_data = fit$x, against.x = "income", group.x = "urban")
+
+plot_data <- plot(
+  ame, x_data = fit$x, against.x = "income", plot.show = FALSE
+)
+head(plot_data$effects)
+```
+
+Both plot methods return axis values, an effect matrix, an optional SE
+matrix, and grouping information. Observation-level margins plots have
+no individual SEs: the SEs in `ame` describe its average effects. Lines
+through effects at chosen profiles and plots of individual effects also
+answer different questions; choose the display to match the question.
+
+### Standard errors for partial effects
+
+With `se = TRUE`, the package uses the simulation-based **Krinsky–Robb
+method**. It draws the entire non-baseline coefficient vector from an
+estimated joint normal distribution using `vcov(fit)`, recomputes the
+requested effects for each draw, and uses their sample standard deviation
+as the SE. Keeping the coefficients together preserves their covariance
+across outcomes and covariates.
+
+These SEs describe coefficient uncertainty while holding the observed
+covariates, or the chosen reference profile, fixed. They rely on an
+asymptotic normal approximation. Set a seed for reproducibility and
+increase `R` if Monte Carlo variation is material for the application.
+
+The reported z statistics divide each effect estimate by its simulated
+SE; p-values use the standard normal distribution. Approximate 95% Wald
+intervals can be formed as the estimate plus or minus 1.96 SEs. These are
+different from taking percentiles of the simulated effects.
+
+The delta method also supports SEs, confidence intervals, and hypothesis
+tests; Wulff uses it in his examples. Mullahy illustrates bootstrap
+inference for average partial effects. These are alternative ways to
+assess uncertainty. The package currently implements Krinsky–Robb SEs for
+partial effects.
+
+### Weighted aggregates of effects
+
+Interpret `wtp()` as a user-valued aggregate of share changes. For
+example, assign external values of 0, 10, and 5 to the three categories:
+
+```r
+values <- c(home = 0, travel = 10, other = 5)
+valued_change <- wtp(urban_change, wtp.vec = values, indv.obs = TRUE)
+valued_change$wtp
+
+curve <- plot(
+  fit, wtp.vec = values, varlist = "income", against = "income",
+  effect = "marginal", t = 40
+)
+```
+
+Values are used in outcome-column order. The aggregate estimates describe
+changes in the supplied value scale, and `wtp.obs` contains the
+observation-level changes when requested from average-across margins.
+
+**Aggregate inference needs care.** The current `wtp()` SE calculation,
+and optional WTP plot bars, use an independence approximation that omits
+covariance between outcome effects. They are not full joint SEs for the
+aggregate. Valid joint aggregate inference would need that covariance or
+joint effect draws. This limitation is separate from the joint
+Krinsky–Robb calculation used by `effects.fmlogit()`.
+
+## Practical concerns
+
+**Prepare a meaningful share system.** Supply all mutually exclusive and
+exhaustive categories on a zero-to-one scale, with each row summing to one.
+Convert percentages before fitting. Shares based on a total of zero are
+undefined; decisions about excluding those observations affect the
+population to which results apply. Ye and Pendyala’s time-use application
+and Mullahy’s portfolio example illustrate why defining the total and the
+categories matters.
+
+**Check the estimation sample and design.** Rows with missing responses
+or covariates are removed together, and supplied weights are subset using
+the same rows. `fit$rowNo` records the retained original positions.
+Consider rescaling covariates when their numerical scales differ greatly,
+and investigate redundant columns or poorly identified outcomes when
+optimisation or covariance estimation fails.
+
+**Separate fitting weights from effect averaging.** The optional
+`weights` argument supplies relative observation weights for estimation.
+The current package uses arithmetic covariate means and unweighted
+averages of individual effects, even after a weighted fit. These are not
+automatically population-weighted average effects.
+
+**Assess the mean specification and the sampling assumptions.** Robust
+SEs do not repair a poorly specified conditional mean. Logit imposes a
+particular relationship between relative shares and the covariates, and
+sample averages can conceal heterogeneous effects. Examine predictions
+and effects over meaningful profiles, avoiding combinations with little
+support in the data. Conditional associations acquire a causal
+interpretation only with an appropriate research design and assumptions.
+
+**Match the model to the question.** A model for expected allocation does
+not describe the entire distribution of allocations or separately model
+the decision to participate in an activity. Ramalho, Ramalho, and
+Murteira discuss cases where a separate participation and allocation
+model can be useful. Standard beta and Dirichlet models offer other
+approaches, usually with stronger distributional assumptions and, in
+their basic forms, restrictions on boundary observations. Those models,
+two-part specifications, and the specification-test procedures studied
+in the papers are not implemented here.
+
+**Use appropriate inference for dependent observations.** The current
+sandwich estimator treats observations as independent. Observation
+weights alone do not account for survey clusters, strata, serial
+correlation, or repeated observations on the same unit. Population-average
+effects may also require accounting for uncertainty in the covariate
+distribution, beyond the fixed-design simulation provided here.
+Ordinary likelihood-ratio procedures for fully specified probability
+models should not be applied automatically to the quasi-likelihood.
+
+## References
+
+- **Mullahy, J. (2015).** [Multivariate fractional regression estimation of
+  econometric share models](https://doi.org/10.1515/jem-2012-0006).
+  *Journal of Econometric Methods*, 4(1), 71–100.
+  The main reference for the multivariate mean specification, robust
+  inference, and share-scale partial effects.
+
+- **Wulff, J. N. (2014).**
+  [Interpreting results from the multinomial logit model: Demonstrated by
+  foreign market entry](https://doi.org/10.1177/1094428114560024).
+  *Organizational Research Methods*, 18(2), 300–325.
+  Guidance on coefficients, marginal effects, predicted outcomes, and plots.
+
+- **Papke, L. E., and Wooldridge, J. M. (1996).** [Econometric methods for
+  fractional response variables with an application to 401(k) plan
+  participation rates.](https://doi.org/10.1002/(SICI)1099-1255(199611)11:6%3C619::AID-JAE418%3E3.0.CO;2-1)
+  *Journal of Applied Econometrics*, 11(6), 619–632.
+  The foundational univariate fractional-response approach.
+
+- **Ramalho, E. A., Ramalho, J. J. S., and Murteira, J. M. R. (2011).**
+  [Alternative estimating and testing empirical strategies for fractional
+  regression models](https://doi.org/10.1111/j.1467-6419.2009.00602.x).
+  *Journal of Economic Surveys*, 25(1), 19–68.
+  An overview of univariate fractional-regression specifications and tests.
+
+- **Ye, X., and Pendyala, R. M. (2005).** A model of daily time use allocation
+  using fractional logit methodology. In H. S. Mahmassani (Ed.),
+  *[Transportation and Traffic Theory: Flow, Dynamics and Human Interaction](https://shop.elsevier.com/books/transportation-and-traffic-theory/mahmassani/978-0-08-044680-6)*,
+  pp. 507–524. Elsevier.
+  An application to daily time allocation.
+
+The original R implementation was developed by James Xinde Ji. Current
+development and maintenance are by Andreï V. Kostyrka; see `DESCRIPTION`
+for package authorship details.
