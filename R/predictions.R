@@ -84,8 +84,7 @@ predict.fmlogit <- function(object, newdata = NULL, newbeta = NULL, ...) {
   } else {
     # A vector represents one observation; a matrix has one observation per row.
     x <- if (is.null(dim(newdata))) matrix(newdata, nrow = 1L) else as.matrix(newdata)
-    if (!is.numeric(x) || nrow(x) < 1L || ncol(x) != K-1L ||
-        any(!is.finite(x))) {
+    if (!is.numeric(x) || nrow(x) < 1L || ncol(x) != K-1L || any(!is.finite(x))) {
       stop("'newdata' must contain finite numeric values in K - 1 design columns, excluding the intercept.")
     }
     row.names <- rownames(x)
@@ -93,8 +92,7 @@ predict.fmlogit <- function(object, newdata = NULL, newbeta = NULL, ...) {
   }
 
   beta <- if (is.null(newbeta)) object$coefficient else as.matrix(newbeta)
-  if (!is.numeric(beta) || !identical(dim(beta), c(J, K)) ||
-      any(!is.finite(beta))) {
+  if (!is.numeric(beta) || !identical(dim(beta), c(J, K)) || any(!is.finite(beta))) {
     stop("'newbeta' must be a finite J-by-K coefficient matrix, including the baseline and intercept.")
   }
   # Common coefficient shifts cancel in expected-share ratios; normalise beta_1.

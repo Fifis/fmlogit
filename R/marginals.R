@@ -87,8 +87,8 @@
 #' @export effects.fmlogit
 #' @exportS3Method NULL
 effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
-                           marg.type = "atmean", se = FALSE,
-                           varlist = NULL, at = NULL, R = 1000, ...) {
+                            marg.type = "atmean", se = FALSE,
+                            varlist = NULL, at = NULL, R = 1000, ...) {
   if (!inherits(object, "fmlogit")) stop("'object' must be an fmlogit fit.")
   effect <- match.arg(effect)
   marg.type <- match.arg(marg.type, c("atmean", "aveacr"))
@@ -107,12 +107,11 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
   N <- nrow(y)
   J <- ncol(y)
   K <- ncol(x)
-  d <- K*(J-1L)
+  d <- K * (J-1L)
   theta.hat <- object$raw.estimates
   if (!is.matrix(x) || !is.numeric(x) || nrow(x) != N || K < 1L ||
       any(!is.finite(x)) || any(x[, 1L] != 1) ||
-      !is.numeric(theta.hat) || length(theta.hat) != d ||
-      any(!is.finite(theta.hat))) {
+      !is.numeric(theta.hat) || length(theta.hat) != d || any(!is.finite(theta.hat))) {
     stop("'object' must contain the current fmlogit design and coefficients.")
   }
   weights <- fitWeights(object)
@@ -152,8 +151,7 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
 
   # Evaluate the same statistic for the fitted coefficients and each simulated draw.
   evaluate <- function(theta, keep = FALSE) {
-    effects.mat <- matrix(NA_real_, nrow = J, ncol = n.vars,
-                          dimnames = list(ynames, varlist))
+    effects.mat <- matrix(NA_real_, nrow = J, ncol = n.vars, dimnames = list(ynames, varlist))
     marg.list <- if (keep) stats::setNames(vector("list", n.vars), varlist) else NULL
     if (effect == "marginal") {
       # p_ij = exp(x_i' beta_j) / sum_h exp(x_i' beta_h), beta_1 = 0.

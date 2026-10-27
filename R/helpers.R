@@ -61,7 +61,7 @@ fitWeights <- function(object) {
   if (is.null(weights)) weights <- rep(1, N)
   if (!is.numeric(weights) || length(weights) != N ||
       any(!is.finite(weights)) || any(weights < 0) || !any(weights > 0)) {
-    stop("'object$weights' must be finite, non-negative and aligned with 'object$x', with at least one positive weight.")
+    stop("'object$weights' must be finite, non-negative and aligned with 'object$x', with at least one weight > 0.")
   }
   weights
 }
@@ -69,5 +69,5 @@ fitWeights <- function(object) {
 # Average each column over the distribution represented by the weights.
 weightedColMeans <- function(x, weights) {
   weights <- weights/max(weights)  # Keep the normalising sum finite.
-  colSums(x*(weights/sum(weights)))
+  colSums(x * (weights/sum(weights)))
 }

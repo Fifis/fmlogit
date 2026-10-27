@@ -84,10 +84,10 @@
 #' @export plot.fmlogit.margins
 #' @exportS3Method
 plot.fmlogit.margins <- function(x, varlist = NULL, x.data = NULL, y = NULL,
-                                against = NULL, against.x = NULL, against.y = NULL,
-                                group.x = NULL, group.algebra = NULL, mfrow = NULL,
-                                type = "p", plot.show = TRUE, group = NULL,
-                                xlab = NULL, ...) {
+                                 against = NULL, against.x = NULL, against.y = NULL,
+                                 group.x = NULL, group.algebra = NULL, mfrow = NULL,
+                                 type = "p", plot.show = TRUE, group = NULL,
+                                 xlab = NULL, ...) {
   object <- x
   if (!inherits(object, "fmlogit.margins") || is.null(object$marg.list)) {
     stop("'object' must contain margins computed with 'marg.type = \"aveacr\"'.")
@@ -135,7 +135,7 @@ plot.fmlogit.margins <- function(x, varlist = NULL, x.data = NULL, y = NULL,
 
   effects.mat <- do.call(cbind, object$marg.list[varlist])
   colnames(effects.mat) <- paste(rep(varlist, each = J),
-                               rep(ynames, times = length(varlist)), sep = ":")
+                                 rep(ynames, times = length(varlist)), sep = ":")
   plot.data <- list(x = against, effects = effects.mat, se = NULL, group = group)
   if (plot.show) {
     if (is.null(xlab)) xlab <- axis.label
@@ -149,9 +149,9 @@ plot.fmlogit.margins <- function(x, varlist = NULL, x.data = NULL, y = NULL,
 #' @export plot.fmlogit
 #' @exportS3Method
 plot.fmlogit <- function(x, wtp.vec, varlist = NULL, against = NULL,
-                        mfrow = NULL, t = 500L, effect = c("discrete", "marginal"),
-                        type = "l", plot.show = TRUE, se = FALSE, R = 1000L,
-                        xlab = NULL, ...) {
+                         mfrow = NULL, t = 500L, effect = c("discrete", "marginal"),
+                         type = "l", plot.show = TRUE, se = FALSE, R = 1000L,
+                         xlab = NULL, ...) {
   object <- x
   if (!inherits(object, "fmlogit")) stop("'object' must be an fmlogit fit.")
   effect <- match.arg(effect)
@@ -195,7 +195,7 @@ plot.fmlogit <- function(x, wtp.vec, varlist = NULL, against = NULL,
     if (se) se.mat <- effects.mat
     for (i in seq_len(nrow(x.eval))) {
       margins <- effects.fmlogit(object, effect = effect, varlist = varlist,
-                                at = x.eval[i, -1L], se = se, R = R)
+                                 at = x.eval[i, -1L], se = se, R = R)
       result <- wtp(margins, wtp.vec)
       effects.mat[i, ] <- if (se) result$wtp[, "Estimate"] else result$wtp[1L, ]
       if (se) se.mat[i, ] <- result$wtp[, "Std. Error"]
@@ -256,7 +256,7 @@ drawEffects <- function(against, effects.mat, se = NULL, group = NULL, mfrow = N
     limits <- if (is.null(ylim)) {
       range(0, effects.mat[, panel],
             if (!is.null(se)) c(effects.mat[, panel] - se[, panel],
-                               effects.mat[, panel] + se[, panel]), finite = TRUE)
+                                effects.mat[, panel] + se[, panel]), finite = TRUE)
     } else ylim
     graphics::plot(against, effects.mat[, panel], type = "n", xlab = xlab, ylab = ylab,
                    main = main[panel], ylim = limits, ...)

@@ -110,7 +110,7 @@ initEst <- function(y, x, weights = NULL) {
 
   theta <- as.vector(t(beta[-1L, , drop = FALSE]))
   names(theta) <- paste(rep(ynames[-1L], each = K),
-                       rep(xnames, times = J-1L), sep = ":")
+                        rep(xnames, times = J-1L), sep = ":")
   theta
 }
 #' Estimate a fractional multinomial logit model
@@ -189,8 +189,8 @@ initEst <- function(y, x, weights = NULL) {
 #'
 #' @export
 fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
-                   method = "BHHH", iterlim = 2000L,
-                   reltol = 1e-8, print.level = 1L, ...) {
+                    method = "BHHH", iterlim = 2000L,
+                    reltol = 1e-8, print.level = 1L, ...) {
   y <- as.matrix(y)
   if (!is.numeric(y) || ncol(y) < 2L || nrow(y) < 1L) {
     stop("'y' must have at least two numeric share columns and one row.")
@@ -262,7 +262,7 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
   N <- nrow(y)
   J <- ncol(y)
   K <- ncol(x)
-  d <- K*(J-1L)  # Number of free coefficients, excluding the first, baseline outcome.
+  d <- K * (J-1L)  # Number of free coefficients, excluding the first, baseline outcome.
   xnames <- colnames(x)
   ynames <- colnames(y)
   totals <- rowSums(y)
@@ -272,14 +272,14 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
   # Each observation contributes one quasi-log-likelihood value: an N-vector.
   loglikObs <- function(theta) {
     model <- softmax(theta, x, J)
-    optim.weights*(rowSums(y*model$eta) - totals*model$log.denom)
+    optim.weights * (rowSums(y*model$eta) - totals*model$log.denom)
   }
 
   # Weighted scores psi_i = w_i s_i: N x d, in the optimiser's parameter order.
   scoreObs <- function(theta) {
     p <- softmax(theta, x, J)$p
     residual <- y - p*totals
-    do.call(cbind, lapply(nonbase, function(j) x*(optim.weights*residual[, j])))
+    do.call(cbind, lapply(nonbase, function(j) x * (optim.weights*residual[, j])))
   }
 
   # Exact Hessian of the weighted objective: d x d, negative semidefinite.
@@ -288,7 +288,7 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
     hess <- matrix(0, nrow = d, ncol = d)
     for (j in nonbase) {
       for (h in nonbase) {
-        curvature <- optim.weights*totals*p[, j]*(as.numeric(j == h) - p[, h])
+        curvature <- optim.weights*totals*p[, j] * (as.numeric(j == h) - p[, h])
         hess[blocks[[j-1L]], blocks[[h-1L]]] <- crossprod(x, x*curvature)
       }
     }
@@ -311,9 +311,9 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
   names(theta.init) <- param.names
 
   opt <- maxLik::maxLik(logLik = loglikObs, grad = scoreObs, hess = hessian,
-                       start = theta.init, method = method,
-                       control = list(iterlim = iterlim, reltol = reltol,
-                                      printLevel = print.level), ...)
+                        start = theta.init, method = method,
+                        control = list(iterlim = iterlim, reltol = reltol,
+                                       printLevel = print.level), ...)
   theta.hat <- as.numeric(opt$estimate)
   names(theta.hat) <- param.names
   if (any(!is.finite(theta.hat))) stop("The optimiser returned non-finite coefficients.")
