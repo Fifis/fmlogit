@@ -2,41 +2,59 @@
 % Please edit documentation in R/wtp.R
 \name{wtp}
 \alias{wtp}
-\title{"Willingness to Pay" for fmlogit models}
+\title{User-valued aggregates of partial effects}
 \usage{
-wtp(object, wtp.vec, varlist = NULL, indv.obs = F)
+wtp(object, wtp.vec, varlist = NULL, indv.obs = FALSE)
 }
 \arguments{
-\item{object}{An "fmlogit.margins" object.}
+\item{object}{An object of class \code{"fmlogit.margins"}.}
 
-\item{wtp.vec}{A 1*J vector that contains the willingness to pay for each choice j.}
+\item{wtp.vec}{Finite numeric vector of length \code{J}, in the outcome order
+of \code{rownames(object$effects)}, with the baseline first.}
 
-\item{varlist}{A string vector which provides the name of variables to calculate
-the wtp. If missing, all variables in object will be calculated.}
+\item{varlist}{Covariate names to select, in the desired output order.
+Defaults to all columns of \code{object$effects}.}
+
+\item{indv.obs}{Also return observation-level effects? Requires margins
+computed with \code{marg.type = "aveacr"}.}
 }
 \value{
-A matrix containing the estimates, standard error, z-stats, and p-value.
+An object of class \code{"fmlogit.wtp"} containing \code{wtp}, the
+  aggregate effects and, when available, joint simulation inference; and optionally
+  \code{wtp.obs}, the observation-level aggregate effects.
 }
 \description{
-Calculates the willingness to pay for fractional multinomial logit models.
+Combine outcome-specific partial effects using supplied values, such as
+category costs or returns. The function name is retained for compatibility;
+it does not estimate willingness to pay from preferences.
 }
 \details{
-This function calculates the aggregate effect of a variable on the
-"willingness to pay" by linearly multiplying the average partial effect with ex-ante (arbitary)
-willingness to pay numbers associated with each choice.
+For outcome effects \eqn{m_{jk}} and supplied values \eqn{v_j},
+the aggregate effect of covariate \eqn{k} is
+\eqn{a_k = \sum_j v_j m_{jk}}. Effects can be derivatives or discrete
+changes, evaluated at a reference profile or averaged across observations.
+Units depend on the supplied values. These values are treated as fixed.
 
-Suppose there are three choices A,B,C, each with a willingness to pay (or cost, profit, budget),
-of 100, 200, and 300. The discrete effect of variable X on A,B and C are 0.5, 0.5, and -1, with
-standard error 0.2, 0.3 and 0.5. The aggregated discrete effect of X on the total willingness
-to pay (or cost), is thus 100*0.5 + 200*0.5 + 300*(-1) = -150. And the standard error can be also
-calculated to be 162.8, assuming that the standard error is independent.
-A simple z-test is provided to test whether the aggregate effect is different from zero.
+Average effects inherit the fitted observation weights through
+\code{effects.fmlogit()}; they are not weighted again here. Individual
+effects retain one row per observation, including zero-weight observations.
 
-Note that if the input fmlogit.margins object has no standard error computation, then no standard error
+When effect SEs are available, the aggregate variance is
+\eqn{\mathrm{Var}(a_k) = v'\mathrm{Cov}(m_k)v}, using the joint outcome-effect
+covariance from Krinsky-Robb draws in \code{object$cov.list}. This retains
+covariance between outcomes and conditions on the observed design and weights.
+Older margins objects without this covariance must be recomputed with
+\code{effects.fmlogit(..., se = TRUE)}. Plotting uses this same calculation.
+Adding a common constant to the supplied values leaves estimates and SEs
+unchanged because the outcome effects sum to zero.
+
+If the input object has no standard errors, only aggregate point effects are returned.
 }
 \examples{
-# results1 <- fmlogit(y,X)
-# effects1 <- effects(results1,effect="marginal",se=T)
-# assume that the WTP = 1,2,3,...J for each choice j.
-wtp(effects1, seq(1:nrow(effects1$effects)))
+x <- data.frame(income = seq(-1, 1, length.out = 30))
+y <- cbind(base = 0.3 + 0.05*x$income,
+           other = 0.7 - 0.05*x$income)
+fit <- fmlogit(y, x, print.level = 0)
+margins <- effects.fmlogit(fit, marg.type = "aveacr")
+wtp(margins, wtp.vec = c(0, 100), indv.obs = TRUE)
 }

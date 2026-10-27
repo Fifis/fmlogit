@@ -2,94 +2,106 @@
 % Please edit documentation in R/marginals.R
 \name{effects.fmlogit}
 \alias{effects.fmlogit}
-\title{Average Partial Effects of the Covariates}
+\title{Partial effects of the covariates}
 \usage{
 \method{effects}{fmlogit}(
   object,
   effect = c("marginal", "discrete"),
   marg.type = "atmean",
-  se = F,
+  se = FALSE,
   varlist = NULL,
   at = NULL,
-  R = 1000
+  R = 1000,
+  ...
 )
 }
 \arguments{
-\item{object}{An "fmlogit" object.}
+\item{object}{An object of class \code{"fmlogit"}.}
 
-\item{effect}{Can be "marginal", for marginal effect; or "discrete", for
-discrete changes from the min to the max.}
+\item{effect}{Either \code{"marginal"} for derivatives or \code{"discrete"}
+for changes from the minimum to the maximum among positive-weight rows.}
 
-\item{marg.type}{Type of marginal or discrete effects to be computed. Default to "atmean", the effect at
-the mean of all covariates. Also take "aveacr", the averaged effects across all observations. See details.}
+\item{marg.type}{Either \code{"atmean"} (the default) to evaluate effects at
+the weighted mean design, or \code{"aveacr"} for weighted average effects.}
 
-\item{se}{Whether to calculate standard errors for those margins. See details.}
+\item{se}{Logical; compute simulation-based Krinsky-Robb standard errors?}
 
-\item{varlist}{A string vector which provides the name of variables to calculate
-the marginal effect. If missing, all variables except the constant will be calculated.
-Use "constant" if wish to compute the marginal effect of constant.}
+\item{varlist}{Character vector of column names in \code{object$x}, in the
+desired output order. By default, all columns except the first, intercept
+column are selected. Use \code{"(Intercept)"} to select the intercept.}
 
-\item{at}{Specify values of the X-matrix at which the partial effect will be retrieved. Expect a vector input
-of length K-1. Only supported for \code{marg.type="atmean"}. See \code{predict.fmlogit(newdata)}.}
+\item{at}{Optional finite numeric vector of length \code{K - 1}, giving the
+non-intercept design values in the order of \code{colnames(object$x)[-1]}.
+Only supported with \code{marg.type = "atmean"}.}
 
-\item{R}{Number of times to sample for the Krinsky-Robb standard error. Default to 1000.}
+\item{R}{Number of joint coefficient draws for Krinsky-Robb standard errors;
+an integer of at least two when \code{se = TRUE}. Defaults to 1000.}
 
-\item{marg.list}{A list of matrices storing the marginal effect matrix for each observation. Exists
-only if marg.type="aveacr".}
+\item{...}{Unused additional arguments.}
 }
 \value{
-The function returns an object of class "fmlogit.margins". It contains the following component:
-
-\code{effects} A matrix of calculated effects.
-
-\code{se} A matrix of standard errors corresponding to the effects. Shows up if se=T for the
-input parameter.
-
-\code{ztable} A list of matrices containing effects, standard errors, z-stats and p-values.
-
-\code{R} Number of simulation times for Krinsky-Robb standard error calculation. Null if se=F.
-
-\code{expl} String message explaining the effects calculated.
+An object of class \code{"fmlogit.margins"} with:
+\describe{
+\item{effects}{A \code{J}-by-selected-covariates matrix of effects.}
+\item{se}{A matching matrix of standard errors, present if \code{se = TRUE}.}
+\item{ztable}{A named list of estimate, standard error, z statistic and p-value
+  tables, present if \code{se = TRUE}.}
+\item{marg.list}{A named list of \code{N}-by-\code{J} observation-level effect
+  matrices, present for \code{marg.type = "aveacr"}.}
+\item{weights}{The retained observation weights inherited from the fit.}
+\item{cov.list}{A named list of \code{J}-by-\code{J} covariance matrices
+  between outcome effects for each selected covariate, present if
+  \code{se = TRUE}. Used for joint aggregate inference in \code{wtp()}.}
+\item{R}{The number of simulation draws, or zero if \code{se = FALSE}.}
+\item{expl}{A brief description of the effects and inference.}
+}
 }
 \description{
-Calculate average partial effects (APE) of independent variable from a
-  fractional multinomial logit model.
+Calculates marginal derivatives or discrete changes in the fitted shares of
+a fractional multinomial logit model, at the mean design or averaged over
+the retained observations.
 }
 \details{
-This module calculates the average partial effects (APEs) from a fractional multinomial logit model.
-Partial effects are the counterpart of the marginal effects in a linear model setting. In linear models,
-usually the parameter estimate itself represents marginal effect (if the variable in question is continuous).
-In logit models, however, the parameter estimates at hand is the effect on log-ratio between the choice variable
-and the baseline variable. This function is intended to extract APEs from the
-coefficient estimates completed from the fractional multinomial logit models.
+With the first outcome normalized to \eqn{\beta_1 = 0}{beta_1 = 0}, the
+conditional mean shares and their marginal derivatives are
+\deqn{p_{ij} = \frac{\exp(x_i' \beta_j)}{\sum_h \exp(x_i' \beta_h)},}
+\deqn{\frac{\partial p_{ij}}{\partial x_{ik}} =
+  p_{ij}\left(\beta_{jk} - \sum_h p_{ih}\beta_{hk}\right).}
+Discrete effects replace design column \eqn{k} by its observed minimum and
+maximum, keeping all other columns fixed, and subtract the resulting shares.
+Effects sum to zero across outcomes because the fitted shares sum to one.
 
-This function allows for two types of partial effects: marginal effect, and discrete effect.
-Marginal effect represents how a unit change in one continuous variable x may influence the choice variable y.
-The estimate of marginal effect is very straighforward. However, special care is needed when averaging
-the marginal effect across observations to acquire APE. One approach is to use the estimate of the marginal effect while setting
-other explanatory variables at the mean. We call this marginal effect at the mean (MEM), which corresponds
-to the option \code{marg.type=atmean}. Another approach is to take the average of marginal effects for each
-individual. We call this average marginal effect (AME), which corresponds to the option \code{marg.type=
-aveacr}.
+Both summaries inherit \code{object$weights}, normalised to sum to one.
+For \code{"atmean"}, the reference profile uses weighted design means,
+unless \code{at} supplies their values. For \code{"aveacr"}, the effects are
+computed for each retained observation and then averaged with these weights.
+Discrete endpoints are the minimum and maximum among positive-weight rows.
+Individual effects remain unweighted values, including on zero-weight rows.
+Effects refer to processed design columns. For factor indicators and
+interactions, changing one column does not reconstruct the original data
+or update related design columns.
 
-The discrete effect represents how a discrete change in one specific x, discrete or continuous, influence the choice variable y.
-This is more useful for categorical variables, as calculating the "marginal effect" makes little sense
-for them. In this function, we calculate the discrete effect by changing the explanatory variable from
-its minimum to its maximum. For a binary variable, this is just the difference between 0 and 1. Similar
-to the marginal effect case, we also have discrete effect at the mean (DEM), corresponding to \code{marg.type= atmean}
- and average dscrete effect (ADE), corresponding to \code{marg.type=aveacr}.
-
-Standard error is provided for the effects by using Krinsky-Robb(KR) method. Krinsky-Robb is a simulation-based
-method that calculates the empirical value of a function given a known distribution of its variables. Here
-we provide Krinsky-Robb standard error for MEM and DEM, and the user can specify how many times of
-simulation \code{R} should the Krinsky-Robb algorithm run.
-
-The user can also specify a subset of explanatory variables when calculating effects. This is done through
-specifying string vectors containing the column names of the explanatory variables to \code{varlist}. As the
-KR standard error can be time-consuming, it is advised to calculate only the variables in need.
+The simulation-based Krinsky-Robb method draws the entire non-baseline
+coefficient vector from its estimated joint normal distribution,
+\eqn{\theta^{(r)} \sim N(\hat\theta, \widehat{\mathrm{Var}}(\hat\theta))}.
+Each draw preserves the baseline normalization and recomputes the requested
+effect using the same design values and observation weights. The ordinary,
+unweighted sample covariance across draws estimates effect uncertainty;
+simulation draws do not carry survey weights. This uses
+\code{object$vcov.full}, including covariance between outcomes and covariates,
+and conditions on the observed design and weights. This is coefficient
+uncertainty, not the weighted dispersion of individual effects. It does not
+include uncertainty in the covariate distribution or account for survey
+clusters, strata, or finite-population corrections. Use \code{set.seed()}
+for reproducible simulations. The reported z statistics and two-sided
+p-values use a normal approximation.
 }
 \examples{
-# results1 = fmlogit(y,X)
-effects(results1, effect = "marginal")
-effects(results1, effect = "discrete", varlist = colnames(object$X)[c(1, 3)])
+x <- data.frame(income = seq(-1, 1, length.out = 30))
+y <- cbind(base = 0.3 + 0.05 * x$income,
+           other = 0.7 - 0.05 * x$income)
+fit <- fmlogit(y, x, print.level = 0)
+effects.fmlogit(fit)
+effects.fmlogit(fit, effect = "discrete", varlist = "income")
+
 }

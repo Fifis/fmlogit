@@ -9,23 +9,25 @@
 \method{summary}{fmlogit}(
   object,
   varlist = NULL,
-  sepline = F,
+  sepline = FALSE,
   digits = 3,
-  add.info = T,
-  list = T,
+  add.info = TRUE,
+  list = TRUE,
   sigcode = c(0.1, 0.05, 0.01, 0.001),
-  print = F
+  print = FALSE,
+  ...
 )
 
 \method{summary}{fmlogit.margins}(
   object,
   varlist = NULL,
-  sepline = F,
+  sepline = FALSE,
   digits = 3,
-  add.info = T,
-  list = T,
+  add.info = TRUE,
+  list = TRUE,
   sigcode = c(0.05, 0.01, 0.001),
-  print = F
+  print = FALSE,
+  ...
 )
 
 \method{summary}{fmlogit.wtp}(
@@ -34,54 +36,67 @@
   sepline = FALSE,
   digits = 3,
   sigcode = c(0.05, 0.01, 0.001),
-  print = F
+  print = FALSE,
+  ...
 )
 }
 \arguments{
-\item{object}{an object with class "fmlogit", "fmlogit.margins", or "fmlogit.wtp".}
+\item{object}{An object of class \code{"fmlogit"}, \code{"fmlogit.margins"},
+or \code{"fmlogit.wtp"}.}
 
-\item{varlist}{select a subset of variable names to be processed. Default to NULL, of which all variables will
-be processed.}
+\item{varlist}{Covariate names to select, in the desired output order.
+Defaults to all available covariates. Unrecognized names are omitted
+with a warning.}
 
-\item{sepline}{whether the output table uses separate lines for coefficients and standard errors.}
+\item{sepline}{Use separate rows for estimates and SEs?}
 
-\item{digits}{number of digits to be signifed. Default to show 3 digits.}
+\item{digits}{Number of significant digits; defaults to three.}
 
-\item{add.info}{whether to add additional descriptive information to the output.}
+\item{add.info}{Include sample, baseline, or effect descriptions?}
 
-\item{list}{whether to output a list object, or a single data frame.}
+\item{list}{Return a list instead of a data frame? Used by the fitted-model
+and margins methods.}
 
-\item{sigcode}{Significance cut-offs to be used (e.g. `c(0.1, 0.05, 0.01)`,
-but can be longer.).}
+\item{sigcode}{Decreasing p-value cutoffs for significance symbols.}
+
+\item{print}{Also print the returned table?}
+
+\item{...}{Unused additional arguments.}
 }
 \value{
-Either a list (for display purposes) or a data.frame (for CSV output purposes). If list return (which is
-the default) is selected, then the list will contain 4 components: $estimates the estimate; $N number of
-observations, $llf value of the log-likelihood function; and $baseline the name of the baseline choice.
+For fitted models and margins, a list with \code{estimates} and
+  optional descriptive fields, or a data frame when \code{list = FALSE}.
+  For aggregates without SEs, a matrix of point estimates; with SEs, a
+  data frame or, when \code{sepline = TRUE}, a character vector.
 }
 \description{
-Generate tables of coefficient estimates, partial effects, and willingness to pay from
-fmlogit-type objects.
+Generate tables of coefficient estimates, partial effects, and user-valued
+aggregates from fractional multinomial logit results.
 }
 \details{
 This module provides summary methods for three fmlogit objects:
 \code{fmlogit}, \code{fmlogit.margins}, and \code{fmlogit.wtp}.
 
-The summary method offers several options to the users. The user can choose for a list output \code{list=T}, which is
- good for display and quoting purposes, or a data frame output \code{list=F}, which is good for table outputs. The user
-can also specify whether to provide additional information other than the parameter estimates, whether to use
-seperate lines for the estimates and the standard errors (which mimics the output style in Stata),
- as well as the significance code.
+Coefficient tables omit the first, baseline outcome because its coefficients
+are fixed at zero. The intercept remains the first design column unless
+\code{varlist} requests another output order. Partial-effect tables include
+the baseline outcome: its share can change even though its coefficients
+are zero.
+
+SEs appear only when available in the input object. Coefficient SEs use the
+full joint HC0 covariance; partial-effect SEs use Krinsky-Robb simulation.
+Aggregate SEs use the joint covariance of outcome effects from those draws.
+The stored z statistics and two-sided normal p-values determine
+the significance symbols. Fitted-model descriptions report the maximised
+quasi-log-likelihood, not a fully specified probability likelihood.
 }
 \examples{
-# generate fmlogit summary
-# results1 <- fmlogit(y,X)
-
-# generate marginal effects summary
-# effects1 <- effects(results1,effect="marginal")
-summary(effects1)
-
-# generate latex style output
-# require(xtable)
-xtable(summary(effects1, list = F, sepline = T))
+x <- data.frame(income = seq(-1, 1, length.out = 30))
+y <- cbind(base = 0.3 + 0.05*x$income,
+           other = 0.7 - 0.05*x$income)
+fit <- fmlogit(y, x, print.level = 0)
+summary(fit)
+margins <- effects.fmlogit(fit)
+summary(margins, list = FALSE)
+summary(wtp(margins, wtp.vec = c(0, 100)))
 }

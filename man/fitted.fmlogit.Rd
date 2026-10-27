@@ -3,45 +3,71 @@
 \name{fitted.fmlogit}
 \alias{fitted.fmlogit}
 \alias{residuals.fmlogit}
-\alias{predicted.fmlogit}
-\alias{Extract}
-\alias{fitted}
-\alias{dependent}
-\alias{variable}
-\alias{from}
-\alias{a}
-\alias{fractional}
-\alias{multinomial}
-\alias{logit}
-\alias{model.}
 \alias{predict.fmlogit}
-\title{Extract fitted values, residuals, and predictions}
+\title{Extract fitted shares, residuals, and predictions}
 \usage{
-\method{fitted}{fmlogit}(object)
+\method{fitted}{fmlogit}(object, ...)
 
-\method{residuals}{fmlogit}(object)
+\method{residuals}{fmlogit}(object, ...)
 
-\method{predict}{fmlogit}(object, newdata = NULL, newbeta = NULL)
+\method{predict}{fmlogit}(object, newdata = NULL, newbeta = NULL, ...)
 }
 \arguments{
-\item{object}{A "fmlogit" object.}
+\item{object}{An object of class \code{"fmlogit"}.}
 
-\item{newdata}{A new X matrix to perform model prediction. If Null, default to the original dataset.
-X can be a vector with length k, or a matrix with k columns, where k is the number of explanatory
-variables in the original model.}
+\item{...}{Unused additional arguments.}
 
-\item{newbeta}{A new augmented matrix of coefficients that can be used to predict outcome variables.
-Feeds into object$coefficient, which contains the baseline coefficient. Useful for constructing
-confidence intervals via simulation or bootstrapping.}
+\item{newdata}{Optional finite numeric matrix or data frame containing the
+processed design columns in \code{colnames(object$x)[-1]} order, excluding
+the intercept. A numeric vector supplies one observation. For several
+observations of a single regressor, use a one-column matrix or data frame.
+Factor indicators and interactions must already be encoded as in
+\code{object$x}. If \code{NULL}, use the retained estimation observations.}
+
+\item{newbeta}{Optional finite \code{J}-by-\code{K} coefficient matrix, with
+outcomes and design columns in the same order as \code{object$coefficient},
+including the intercept column and baseline row. Applies even when
+\code{newdata = NULL}.}
+}
+\value{
+A data frame with one column per outcome and one row per observation.
+  \code{fitted()} returns the stored fitted shares, \code{residuals()} returns
+  observed minus fitted shares, and \code{predict()} returns predicted shares.
 }
 \description{
-Extract fitted values, residuals, and predictions
+Extract fitted conditional shares, response residuals, or predictions from
+a fractional multinomial logit model.
+}
+\details{
+Predictions use \eqn{p_{ij} = \exp(x_i' \beta_j) /
+  \sum_h \exp(x_i' \beta_h)}, evaluated with the estimator's stable softmax.
+The intercept is added as the first design column. Response residuals are
+\eqn{y_{ij} - p_{ij}}; their rows sum to zero.
+The first outcome is the baseline. A common coefficient shift in
+\code{newbeta} is removed so that its first row is zero before prediction.
+Fitted values and residuals cover only the observations retained during
+estimation; \code{object$row.no} identifies their original row positions.
+Observation weights affect the fitted coefficients, but individual fitted
+shares, predictions and residuals are not multiplied by those weights.
+A population mean prediction requires a separate weighted average over the
+relevant covariate distribution.
 }
 \examples{
-# results1 = fmlogit(y,X)
-fitted(results1)
-residuals(results1)
-predict(results1)
-# predict using the first observation from the original dataset.
-predict(results1, X[1, ])
+x <- data.frame(income = seq(-1, 1, length.out = 30))
+y <- cbind(base = 0.3 + 0.05*x$income,
+           other = 0.7 - 0.05*x$income)
+fit <- fmlogit(y, x, print.level = 0)
+fitted(fit)
+residuals(fit)
+predict(fit)
+
+# Predict at two new income values, or at a single point.
+predict(fit, newdata = data.frame(income = c(-0.5, 0.5)))
+predict(fit, newdata = 0)
+
+# Remove the income effect while retaining the estimated intercepts.
+beta <- fit$coefficient
+beta[, "income"] <- 0
+predict(fit, newbeta = beta)
+
 }

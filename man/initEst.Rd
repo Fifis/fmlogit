@@ -7,17 +7,17 @@
 initEst(y, x, weights = NULL)
 }
 \arguments{
-\item{y}{Numeric N-by-J matrix of observed shares, with J >= 2.
+\item{y}{Numeric `N`-by-`J` matrix of observed shares, with `J >= 2`.
 Each row must sum to one.}
 
-\item{x}{Numeric N-by-K *design matrix*, including a column of ones first.
+\item{x}{Numeric `N`-by-`K` *design matrix*, including a column of ones first.
 The columns must have the same order used during joint estimation.}
 
-\item{weights}{Optional vector of N nonnegative observation weights.}
+\item{weights}{Optional vector of `N` non-negative observation weights.}
 }
 \value{
-Named numeric vector of length (J - 1) * K. Coefficients are grouped
-  by non-baseline alternative; the baseline coefficients are omitted.
+Named numeric vector of length `(J-1)*K`. Coefficients are grouped
+  by non-baseline outcome; the baseline coefficients are omitted.
 }
 \description{
 Fits a separate, share-weighted fractional binary logit for each non-baseline
@@ -26,22 +26,20 @@ conditional-mean coefficients under correct specification, but are generally
 not identical to the joint fractional multinomial QMLE in finite samples.
 }
 \details{
-For alternative j > 1, fit a fractional binary logit with response
+For outcome `j > 1`, fit a fractional binary logit with response
 \eqn{y_j / (y_1 + y_j)}{y_j / (y_1 + y_j)}, and prior weights
 \eqn{w (y_1 + y_j)}{w * (y_1 + y_j)}.
 Observations with \eqn{y_1 + y_j = 0}{y_1 + y_j = 0} make no contribution.
 In the event of failed or non-finite pairwise estimates, the corresponding
 coefficient block is initialized to zero (with a warning).
 
-The reasonable initial value comes from `J-1` separate weighted binary-logit
-regressions, each comparing one alternative with the baseline alternative.
-Since the normalisation is such that the first `K` elements are zeros (and
-do not enter the optimisation), we note that
+The first outcome has a zero coefficient vector, omitted from optimisation.
+With this normalisation,
 \eqn{E(y_{ij}\mid x_i) = p_{ij}}{E(y_ij | x_i) = p_ij} and
 \eqn{p_{ij}/p_{i1} = \exp (x_i' \beta_j)}{p_ij / p_i1 = exp (x_i' beta_j)}.
 Now define \eqn{\pi_{ij} = \frac{p_{ij}}{p_{i1} + p_{ij}}}{pi_ij = p_ij / (p_i1 + p_ij)}.
-Substituting the multinomial-logit probabilities gives
-\eqn{\pi_{ij} = \frac{\exp(x_i' \beta_j)}{1 + \exp(x_i' \beta_j)} = 
+Substituting the multinomial-logit conditional means gives
+\eqn{\pi_{ij} = \frac{\exp(x_i' \beta_j)}{1 + \exp(x_i' \beta_j)} =
 \Lambda(x_i' \beta_j)}{pi_ij = exp(x_i' beta_j) / (1 + exp(x_i' beta_j)) =
 Lambda(x_i' beta_j)}.
 This is a pairwise application of the fractional quasi-likelihood logic in
