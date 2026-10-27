@@ -24,6 +24,8 @@
 #'   \sum_h \exp(x_i' \beta_h)}, evaluated with the estimator's stable softmax.
 #' The intercept is added as the first design column. Response residuals are
 #' \eqn{y_{ij} - p_{ij}}; their rows sum to zero.
+#' The first outcome is the baseline. A common coefficient shift in
+#' \code{newbeta} is removed so that its first row is zero before prediction.
 #' Fitted values and residuals cover only the observations retained during
 #' estimation; \code{object$rowNo} identifies their original row positions.
 #'
@@ -91,10 +93,10 @@ predict.fmlogit <- function(object, newdata = NULL, newbeta = NULL, ...) {
       any(!is.finite(beta))) {
     stop("'newbeta' must be a finite J-by-K coefficient matrix, including the baseline and intercept.")
   }
-  # Common coefficient shifts cancel in the probability ratios; normalize beta_1.
+  # Common coefficient shifts cancel in expected-share ratios; normalize beta_1.
   beta <- sweep(beta, 2L, beta[1L, ], FUN = "-")
   theta <- as.vector(t(beta[-1L, , drop = FALSE]))
-  p <- softmax(theta, x, J)$probabilities
+  p <- softmax(theta, x, J)$p
   dimnames(p) <- list(row_names, colnames(object$y))
   as.data.frame(p)
 }

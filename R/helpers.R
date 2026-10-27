@@ -1,47 +1,51 @@
 #' @importFrom Rdpack reprompt
+#' @importFrom maxLik maxLik
+#' @importFrom stats effects fitted predict residuals vcov
 
-asterisk <- function(x, k = c(0.10, 0.05, 0.01, 0.001)) {
-  stopifnot(length(k) > 0, all(diff(k) < 0), !anyNA(k))
+asterisk <- function(p_value, sigcode = c(0.10, 0.05, 0.01, 0.001)) {
+  stopifnot(length(sigcode) > 0, all(diff(sigcode) < 0), !anyNA(sigcode))
 
-  n <- length(k)
-  i <- 0:n
+  n_codes <- length(sigcode)
+  code_index <- 0:n_codes
 
-  symbols <- if (n <= 3) {
-    strrep("*", i)
-  } else if (n == 4) {
-    c("", ".", strrep("*", seq_len(n - 1)))
+  symbols <- if (n_codes <= 3) {
+    strrep("*", code_index)
+  } else if (n_codes == 4) {
+    c("", ".", strrep("*", seq_len(n_codes - 1)))
   } else {
-    paste0(strrep("*", i %/% 2), ifelse(i %% 2 == 1, ".", ""))
+    paste0(strrep("*", code_index %/% 2), ifelse(code_index %% 2 == 1, ".", ""))
   }
 
-  level <- n - findInterval(x, rev(k), left.open = TRUE)
+  level <- n_codes - findInterval(p_value, rev(sigcode), left.open = TRUE)
   symbols[level + 1]
 }
 
-# Return the multinomial-logit probabilities, linear indices and log denominator.
-# theta contains the (J - 1) coefficient vectors, stacked by alternative.
+# Shared notation: y is N x J, x is N x K with the intercept first, and beta
+# is J x K with beta_1 = 0. theta stacks the K-vectors for outcomes 2, ..., J.
+# eta_ij = x_i' beta_j is the linear index; p_ij is the conditional mean share,
+# called xi_k(x; beta) in Mullahy (2015), with his outcome index k renamed j.
+# xi does not denote the linear index.
 softmax <- function(theta, x, J) {
   K <- ncol(x)
-  B <- rbind(rep(0, K), matrix(theta, nrow = J - 1L, ncol = K, byrow = TRUE))
-  
-  eta <- tcrossprod(x, B)          # N x J
-  shift <- apply(eta, 1L, max)      # N
+  beta <- rbind(rep(0, K), matrix(theta, nrow = J - 1L, ncol = K, byrow = TRUE))
+
+  eta <- tcrossprod(x, beta)       # N x J
+  shift <- apply(eta, 1L, max)     # N
   shifted <- sweep(eta, 1L, shift, FUN = "-")
   numerator <- exp(shifted)
   denominator <- rowSums(numerator)
-  
+
   list(
-    probabilities = numerator / denominator,
+    p = numerator / denominator,
+    beta = beta,
     eta = eta,
     log_denom = shift + log(denominator)
   )
 }
 
-testcols <- function(x) {
-  m <- crossprod(as.matrix(x))
-  ee <- eigen(m)
-  evecs <- split(zapsmall(ee$vectors), col(ee$vectors))
-  mapply(function(val, vec) {
-    if (val != 0) NULL else which(vec != 0)
-  }, zapsmall(ee$values), evecs)
+# The same two-sided normal approximation is used for coefficients and effects.
+wald_table <- function(est, se) {
+  z <- est / se
+  cbind(Estimate = est, `Std. Error` = se, `z value` = z,
+        `Pr(>|z|)` = 2 * stats::pnorm(abs(z), lower.tail = FALSE))
 }

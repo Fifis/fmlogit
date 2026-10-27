@@ -1,5 +1,6 @@
 #' Obtain pairwise fractional-logit starting values
 #'
+#' @md
 #' @description
 #' Fits a separate, share-weighted fractional binary logit for each non-baseline
 #' outcome against the first outcome. These estimators target the multinomial
@@ -12,24 +13,22 @@
 #'   The columns must have the same order used during joint estimation.
 #' @param weights Optional vector of N nonnegative observation weights.
 #' @return Named numeric vector of length (J - 1) * K. Coefficients are grouped
-#'   by non-baseline alternative; the baseline coefficients are omitted.
+#'   by non-baseline outcome; the baseline coefficients are omitted.
 #'   
 #' @details
-#' For alternative j > 1, fit a fractional binary logit with response
+#' For outcome j > 1, fit a fractional binary logit with response
 #' \eqn{y_j / (y_1 + y_j)}{y_j / (y_1 + y_j)}, and prior weights
 #' \eqn{w (y_1 + y_j)}{w * (y_1 + y_j)}.
 #' Observations with \eqn{y_1 + y_j = 0}{y_1 + y_j = 0} make no contribution.
 #' In the event of failed or non-finite pairwise estimates, the corresponding
 #' coefficient block is initialized to zero (with a warning).
 #' 
-#' The reasonable initial value comes from `J-1` separate weighted binary-logit
-#' regressions, each comparing one alternative with the baseline alternative.
-#' Since the normalisation is such that the first `K` elements are zeros (and
-#' do not enter the optimisation), we note that
+#' The first outcome has a zero coefficient vector, omitted from optimisation.
+#' With this normalisation,
 #' \eqn{E(y_{ij}\mid x_i) = p_{ij}}{E(y_ij | x_i) = p_ij} and
 #' \eqn{p_{ij}/p_{i1} = \exp (x_i' \beta_j)}{p_ij / p_i1 = exp (x_i' beta_j)}.
 #' Now define \eqn{\pi_{ij} = \frac{p_{ij}}{p_{i1} + p_{ij}}}{pi_ij = p_ij / (p_i1 + p_ij)}.
-#' Substituting the multinomial-logit probabilities gives
+#' Substituting the multinomial-logit conditional means gives
 #' \eqn{\pi_{ij} = \frac{\exp(x_i' \beta_j)}{1 + \exp(x_i' \beta_j)} = 
 #' \Lambda(x_i' \beta_j)}{pi_ij = exp(x_i' beta_j) / (1 + exp(x_i' beta_j)) =
 #' Lambda(x_i' beta_j)}.
@@ -73,22 +72,24 @@ initEst <- function(y, x, weights = NULL) {
   
   if (is.null(colnames(y))) colnames(y) <- paste0("share", seq_len(J))
   if (is.null(colnames(x))) {
-    colnames(x) <- c("(Intercept)", paste0("X", seq_len(K - 1L)))
+    colnames(x) <- c("(Intercept)", if (K > 1L) paste0("x", seq_len(K - 1L)))
   }
-  
-  B <- matrix(0, nrow = J - 1L, ncol = K, dimnames = list(colnames(y)[-1L], colnames(x)))
-  
-  for (h in seq.int(2L, J)) {
-    pair_total <- y[, 1L] + y[, h]
+
+  xnames <- colnames(x)
+  ynames <- colnames(y)
+  beta <- matrix(0, J, K, dimnames = list(ynames, xnames))
+
+  for (j in seq.int(2L, J)) {
+    pair_total <- y[, 1L] + y[, j]
     prior_weights <- pair_total * weights
     keep <- prior_weights > 0
     
     if (!any(keep)) {
-      warning(sprintf("No positive pairwise weight for '%s'; using zeros.", colnames(y)[h]))
+      warning(sprintf("No positive pairwise weight for '%s'; using zeros.", ynames[j]))
       next
     }
     
-    response <- y[keep, h] / pair_total[keep]
+    response <- y[keep, j] / pair_total[keep]
     fit <- tryCatch(
       stats::glm.fit(
         x = x[keep, , drop = FALSE], y = response, weights = prior_weights[keep],
@@ -100,24 +101,21 @@ initEst <- function(y, x, weights = NULL) {
     if (is.null(fit) || !isTRUE(fit$converged) ||
         length(fit$coefficients) != K ||
         any(!is.finite(fit$coefficients))) {
-      warning(sprintf("Pairwise GLM for '%s' failed; using zeros.", colnames(y)[h]))
+      warning(sprintf("Pairwise GLM for '%s' failed; using zeros.", ynames[j]))
       next
     }
     
-    B[h - 1L, ] <- fit$coefficients
+    beta[j, ] <- fit$coefficients
   }
-  
-  ans <- as.vector(t(B))
-  names(ans) <- paste(rep(rownames(B), each = K),
-                      rep(colnames(B), times = J - 1L), sep = ":")
-  ans
+
+  theta <- as.vector(t(beta[-1L, , drop = FALSE]))
+  names(theta) <- paste(rep(ynames[-1L], each = K),
+                       rep(xnames, times = J - 1L), sep = ":")
+  theta
 }
-
-
-
-
 #' Estimate a fractional multinomial logit model
 #'
+#' @md
 #' @description
 #' Estimates a multinomial-logit conditional-mean model for compositional
 #' outcomes by maximizing the weighted multinomial *quasi*-log-likelihood.
@@ -125,20 +123,21 @@ initEst <- function(y, x, weights = NULL) {
 #' computed using the full joint, observation-level sandwich covariance matrix.
 #'
 #' @param y Numeric N-by-J matrix or data frame of observed shares, `J >= 2`.
-#'   Values must lie in [0, 1] and rows must sum to one.
+#'   Values must lie in \eqn{[0, 1]} and rows must sum to one.
 #'   The first column is automatically treated as the baseline.
 #' @param x `N`-row matrix or data frame of regressors. Numeric, factor, and
 #'   character columns are allowed in data frames. An intercept is added
 #'   automatically as the first column. Any supplied constant columns are
 #'   removed before creating the design matrix. No variable selection is done.
-#' @param weights Optional non-negative observation weights, length `N`. The
-#'   default is equal weights. These are relative sampling weights that multiply
-#'   individual pseudo-likelihood values. Their behaviour is similar to
-#'   the `weights` argument in `lm()`.
+#' @param weights Optional nonnegative observation weights, length `N`. The
+#'   default is equal weights. These relative weights multiply the individual
+#'   quasi-log-likelihood contributions; rescaling them leaves estimates and
+#'   the HC0 covariance unchanged. They are not frequency weights.
 #' @param beta0 Optional starting coefficients, length `(J-1) * K`, where `K` is
 #'   the number of columns in the *processed* design matrix including the
-#'   intercept. Ordered by alternative, with the intercept first in each block.
-#'   If NULL, use pairwise fractional binary logits from [initEst()].
+#'   intercept. Ordered by non-baseline outcome, with the intercept first in
+#'   each block. If NULL, compare pairwise fractional binary logits from
+#'   [initEst()] with zero coefficients and use the better starting objective.
 #' @param method Optimiser for [maxLik::maxLik()]; default "BHHH". Use "CG"
 #'   if the estimation is very slow.
 #' @param iterlim Positive iteration limit passed to `maxLik()`.
@@ -148,9 +147,14 @@ initEst <- function(y, x, weights = NULL) {
 #'
 #' @details
 #' For the first, reference category, \eqn{\beta_1 = 0}{beta_1 = 0}.
-#' The conditional means are
+#' The linear index is \eqn{\eta_{ij} = x_i'\beta_j}{eta_ij = x_i' beta_j}.
+#' The conditional mean shares are
 #' \eqn{p_{ij} = \exp(x_i' \beta_j) / \sum_h \exp(x_i' \beta_h)}{p_ij = exp(x_i' beta_j) / sum_h exp(x_i' beta_h)}.
-#' The objective is \eqn{\sum_i w_i \sum_j y_{ij} \log p_ij}{sum_i w_i sum_j y_ij log(p_ij)},
+#' Here \eqn{p_{ij}} corresponds to \eqn{\xi_k(x;\beta)} in Mullahy (2015),
+#' with his outcome index \eqn{k} relabelled \eqn{j}. He normalises the last
+#' outcome instead; fitted shares and partial effects are invariant to the
+#' choice of baseline.
+#' The objective is \eqn{\sum_i w_i \sum_j y_{ij} \log p_{ij}}{sum_i w_i sum_j y_ij log(p_ij)},
 #' as per \insertCite{mullahy2015multivariate}{fmlogit}.
 #' The joint HC0 covariance uses the inverse weighted negative Hessian as
 #' bread and the outer product of the weighted *full* scores as meat.
@@ -160,14 +164,16 @@ initEst <- function(y, x, weights = NULL) {
 #' Rows with missing responses/covariates are removed before estimation;
 #' the input weights are subset using exactly the same row indices.
 #'
-#' @return An object of class "fmlogit". The existing fields `raw.estimates`,
-#'   `estimates`, `baseline`, `likelihood`, `conv_code`, `convergence`,
-#'   `count`, `y`, `x`, `weights`, `rowNo`, and `coefficient` are retained.
+#' @return An object of class "fmlogit". `raw.estimates` contains the stacked
+#'   non-baseline coefficients; `estimates` contains their robust Wald tables.
+#'   `baseline` names the first outcome, and `likelihood` is the maximised
+#'   quasi-log-likelihood. `conv_code` and `convergence` describe optimisation.
+#'   `count`, `y`, `x`, `weights`, and `rowNo` describe the retained sample.
 #'   `coefficient` is J-by-K, with an all-zero first row.
 #'   `vcov_full` is the complete `K(J-1)`-by-`K(J-1)` joint HC0 covariance matrix.
 #'   `vcov` is a legacy list of J diagonal blocks of `vcov_full`, with a zero
 #'   block for the normalized baseline (cross-category blocks are only in
-#'   `vcov_full`). `fitted.values` holds the `N`-by-`J` predicted shares.
+#'   `vcov_full`). `fitted.values` holds the `N`-by-`J` fitted shares.
 #'
 #' @references
 #' \insertAllCited{}
@@ -217,7 +223,7 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
       is.numeric(v) || is.factor(v) || is.character(v) || is.logical(v)
     }, logical(1))
     if (!all(good_type)) {
-      stop("'x' contains unsupported column types in columns ", which(!good_type)-1, ".")
+      stop("'x' contains unsupported column types in columns ", which(!good_type), ".")
     }
     x_data <- lapply(x_data, function(v) {
       if (is.factor(v)) droplevels(v) else v
@@ -238,57 +244,62 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
   weighted_x <- x[weights > 0, , drop = FALSE]
   rank_x <- qr(weighted_x)$rank
   if (rank_x != ncol(x)) {
-    stop("The X design matrix is rank-deficient. Remove redundant regressors before fitting.")
+    stop("The x design matrix is rank-deficient. Remove redundant regressors before fitting.")
   }
   
   N <- nrow(y)
   J <- ncol(y)
   K <- ncol(x)
-  d <- K * (J - 1L)  # Number of coefficients
+  d <- K * (J - 1L)  # Number of free coefficients; the first outcome is fixed.
+  xnames <- colnames(x)
+  ynames <- colnames(y)
   totals <- rowSums(y)
   nonbase <- seq.int(2L, J)
-  blocks <- lapply(seq_len(J - 1L), function(h) ((h - 1L) * K + 1L):(h * K))
+  blocks <- lapply(nonbase, function(j) seq_len(K) + (j - 2L) * K)
   
   # Quasi-log-likelihood contributions: N-vector.
-  logLik_obs <- function(theta) {
-    z <- softmax(theta, x, J)
-    weights * (rowSums(y * z$eta) - totals * z$log_denom)
+  loglik_obs <- function(theta) {
+    model <- softmax(theta, x, J)
+    weights * (rowSums(y * model$eta) - totals * model$log_denom)
   }
   
   # Observation-wise weighted scores: N x d, in optimizer parameter order.
   score_obs <- function(theta) {
-    P <- softmax(theta, x, J)$probabilities
-    residual <- y[, nonbase, drop = FALSE] - sweep(P[, nonbase, drop = FALSE], 1L, totals, FUN = "*")
-    do.call(cbind, lapply(seq_len(J - 1L), function(h) x * (weights * residual[, h])))
+    p <- softmax(theta, x, J)$p
+    residual <- y - p * totals
+    do.call(cbind, lapply(nonbase, function(j) x * (weights * residual[, j])))
   }
   
   # Exact Hessian of the weighted objective, d x d (negative semidefinite).
   hessian <- function(theta) {
-    P <- softmax(theta, x, J)$probabilities
-    H <- matrix(0, d, d)
-    for (a in seq_len(J - 1L)) {
-      for (b in seq_len(J - 1L)) {
-        curvature <- weights * totals * P[, a + 1L] * (as.numeric(a == b) - P[, b + 1L])
-        H[blocks[[a]], blocks[[b]]] <- crossprod(x, x * curvature)
+    p <- softmax(theta, x, J)$p
+    hess <- matrix(0, d, d)
+    for (j in nonbase) {
+      for (h in nonbase) {
+        curvature <- weights * totals * p[, j] * (as.numeric(j == h) - p[, h])
+        hess[blocks[[j - 1L]], blocks[[h - 1L]]] <- crossprod(x, x * curvature)
       }
     }
-    -H
+    -hess
   }
   
   if (is.null(beta0)) {
-    beta0 <- rep(0, (J-1)*K)
-    beta1 <- initEst(y = y, x = x, weights = weights)
-    if (sum(logLik_obs(beta1)) > sum(logLik_obs(beta0))) beta0 <- beta1
-  } else if (!is.numeric(beta0) || length(beta0) != d || any(!is.finite(beta0))) {
-    stop("'beta0' must contain (J - 1) * K finite numeric coefficients  in alternative-major order.")
+    theta_init <- rep(0, d)
+    theta_pairwise <- initEst(y = y, x = x, weights = weights)
+    if (sum(loglik_obs(theta_pairwise)) > sum(loglik_obs(theta_init))) theta_init <- theta_pairwise
+  } else {
+    if (!is.numeric(beta0) || length(beta0) != d || any(!is.finite(beta0))) {
+      stop("'beta0' must contain (J - 1) * K finite numeric coefficients in outcome-major order.")
+    }
+    theta_init <- beta0
   }
   
-  param_names <- paste(rep(colnames(y)[nonbase], each = K),
-                       rep(colnames(x), times = J - 1L), sep = ":")
-  names(beta0) <- param_names
+  param_names <- paste(rep(ynames[nonbase], each = K),
+                       rep(xnames, times = J - 1L), sep = ":")
+  names(theta_init) <- param_names
   
-  opt <- maxLik::maxLik(logLik = logLik_obs, grad = score_obs, hess = hessian,
-                        start = beta0, method = method,
+  opt <- maxLik::maxLik(logLik = loglik_obs, grad = score_obs, hess = hessian,
+                        start = theta_init, method = method,
                         control = list(iterlim = iterlim, reltol = reltol,
                                        printLevel = print.level), ...)
   theta_hat <- as.numeric(opt$estimate)
@@ -299,53 +310,47 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
   }
   
   # Robust joint sandwich covariance: (H^{-1}) (S'S) (H^{-1}).
-  H <- -hessian(theta_hat)
-  if (any(!is.finite(H)) || rcond(H) < 1e-12) {
+  bread <- -hessian(theta_hat)
+  if (any(!is.finite(bread)) || rcond(bread) < 1e-12) {
     stop("The joint weighted Hessian is singular or poorly conditioned; robust covariance estimation is unavailable.")
   }
-  H_inv <- solve(H)
-  S <- score_obs(theta_hat)
-  V <- H_inv %*% crossprod(S) %*% H_inv
-  V <- (V + t(V)) / 2  # Remove floating-point asymmetry
-  dimnames(V) <- list(param_names, param_names)
+  bread_inv <- solve(bread)
+  scores <- score_obs(theta_hat)
+  vcov_full <- bread_inv %*% crossprod(scores) %*% bread_inv
+  vcov_full <- (vcov_full + t(vcov_full)) / 2  # Remove floating-point asymmetry.
+  dimnames(vcov_full) <- list(param_names, param_names)
   
-  B <- rbind(rep(0, K), matrix(theta_hat, nrow = J - 1L, ncol = K, byrow = TRUE))
-  dimnames(B) <- list(colnames(y), colnames(x))
+  model <- softmax(theta_hat, x, J)
+  beta <- model$beta
+  dimnames(beta) <- list(ynames, xnames)
   
   vcov <- vector("list", J)
-  names(vcov) <- colnames(y)
-  vcov[[1L]] <- matrix(0, K, K, dimnames = list(colnames(x), colnames(x)))
-  sigmat <- matrix(NA_real_, J - 1L, K)
-  for (h in seq_len(J - 1L)) {
-    vh <- V[blocks[[h]], blocks[[h]], drop = FALSE]
-    dimnames(vh) <- list(colnames(x), colnames(x))
-    vcov[[h + 1L]] <- vh
-    sigmat[h, ] <- sqrt(pmax(0, diag(vh)))
+  names(vcov) <- ynames
+  vcov[[1L]] <- matrix(0, K, K, dimnames = list(xnames, xnames))
+  se_mat <- matrix(0, J, K, dimnames = list(ynames, xnames))
+  for (j in nonbase) {
+    vcov_j <- vcov_full[blocks[[j - 1L]], blocks[[j - 1L]], drop = FALSE]
+    dimnames(vcov_j) <- list(xnames, xnames)
+    vcov[[j]] <- vcov_j
+    se_mat[j, ] <- sqrt(pmax(0, diag(vcov_j)))
   }
   
-  tabout <- lapply(seq_len(J - 1L), function(h) {
-    est <- B[h + 1L, ]
-    se <- sigmat[h, ]
-    z <- est / se
-    result <- cbind(
-      Estimate = est,
-      `Std. Error` = se,
-      `z value` = z,
-      `Pr(>|z|)` = 2 * stats::pnorm(abs(z), lower.tail = FALSE)
-    )
-    rownames(result) <- colnames(x)
+  tabout <- lapply(nonbase, function(j) {
+    result <- wald_table(beta[j, ], se_mat[j, ])
+    colnames(result) <- c("Estimate", "Std. Error", "z value", "Pr(>|z|)")
+    rownames(result) <- xnames
     result
   })
-  names(tabout) <- colnames(y)[nonbase]
+  names(tabout) <- ynames[nonbase]
   
-  fitted_values <- softmax(theta_hat, x, J)$probabilities
-  dimnames(fitted_values) <- list(rownames(y), colnames(y))
+  p <- model$p
+  dimnames(p) <- list(rownames(y), ynames)
   
   structure(list(
     raw.estimates = theta_hat,
     estimates = tabout,
-    init.val = beta0,
-    baseline = colnames(y)[1L],
+    init.val = theta_init,
+    baseline = ynames[1L],
     likelihood = opt$maximum,
     conv_code = as.integer(opt$code),
     convergence = paste(opt$type, paste(opt$iterations, "iterations"), opt$message, sep = ", "),
@@ -354,15 +359,16 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
     x = x,
     weights = weights,
     rowNo = rowNo,
-    coefficient = B,
+    coefficient = beta,
     vcov = vcov,
-    vcov_full = V,
-    fitted.values = fitted_values
+    vcov_full = vcov_full,
+    fitted.values = p
   ), class = "fmlogit")
 }
 
 #' Extract the full joint covariance matrix of an fmlogit fit
 #'
+#' @md
 #' @param object An object of class `"fmlogit"`.
 #' @param ... Unused.
 #' @return Full robust joint covariance matrix, excluding normalized baseline

@@ -19,10 +19,11 @@
 #'   Only supported with \code{marg.type = "atmean"}.
 #' @param R Number of joint coefficient draws for Krinsky-Robb standard errors;
 #'   an integer of at least two when \code{se = TRUE}. Defaults to 1000.
+#' @param ... Unused additional arguments.
 #'
 #' @details
 #' With the first outcome normalized to \eqn{\beta_1 = 0}{beta_1 = 0}, the
-#' conditional shares and their marginal derivatives are
+#' conditional mean shares and their marginal derivatives are
 #' \deqn{p_{ij} = \frac{\exp(x_i' \beta_j)}{\sum_h \exp(x_i' \beta_h)},}
 #' \deqn{\frac{\partial p_{ij}}{\partial x_{ik}} =
 #'   p_{ij}\left(\beta_{jk} - \sum_h p_{ih}\beta_{hk}\right).}
@@ -30,8 +31,9 @@
 #' maximum, keeping all other columns fixed, and subtract the resulting shares.
 #' Effects sum to zero across outcomes because the fitted shares sum to one.
 #'
-#' For \code{"atmean"}, all design columns are fixed at their arithmetic means,
-#' unless \code{at} supplies their values. For \code{"aveacr"}, the effects are
+#' For \code{"atmean"}, the reference profile uses arithmetic design means,
+#' unless \code{at} supplies their values. Discrete effects still replace the
+#' selected column by its observed endpoints. For \code{"aveacr"}, the effects are
 #' computed for each retained observation and then averaged arithmetically.
 #' Estimation weights affect the fitted coefficients and their covariance;
 #' they do not reweight these means or the observed minimum and maximum.
@@ -71,9 +73,10 @@
 #' effects.fmlogit(fit, effect = "discrete", varlist = "income")
 #'
 #' @export effects.fmlogit
+#' @exportS3Method
 effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
                             marg.type = "atmean", se = FALSE,
-                            varlist = NULL, at = NULL, R = 1000) {
+                            varlist = NULL, at = NULL, R = 1000, ...) {
   if (!inherits(object, "fmlogit")) stop("'object' must be an fmlogit fit.")
   effect <- match.arg(effect)
   marg.type <- match.arg(marg.type, c("atmean", "aveacr"))
@@ -86,7 +89,7 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
   }
 
   # Match fmlogit(): x is N x K with the intercept first; y is N x J.
-  # theta_hat stacks K coefficients per non-baseline outcome (h = 1, ..., J-1).
+  # theta_hat stacks K coefficients per non-baseline outcome (j = 2, ..., J).
   x <- object$x
   y <- object$y
   N <- nrow(y)
@@ -110,6 +113,7 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
   }
   var_colNo <- match(varlist, xnames)
   if (anyNA(var_colNo)) stop("Unrecognized covariate names in 'varlist'.")
+  n_vars <- length(var_colNo)
 
   if (!is.null(at) && marg.type != "atmean") {
     stop("'at' is only supported for 'marg.type = \"atmean\"'.")
@@ -133,19 +137,19 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
 
   # Evaluate the same statistic for the fitted coefficients and every KR draw.
   evaluate <- function(theta, keep = FALSE) {
-    xmarg <- matrix(NA_real_, J, length(var_colNo),
-                    dimnames = list(ynames, varlist))
-    marg_list <- if (keep) stats::setNames(vector("list", length(varlist)), varlist) else NULL
+    effects_mat <- matrix(NA_real_, J, n_vars, dimnames = list(ynames, varlist))
+    marg_list <- if (keep) stats::setNames(vector("list", n_vars), varlist) else NULL
     if (effect == "marginal") {
       # p_ij = exp(x_i' beta_j) / sum_h exp(x_i' beta_h), beta_1 = 0.
       # Reuse the estimator's stable softmax rather than exponentiating directly.
-      p <- softmax(theta, x_eval, J)$probabilities
+      model <- softmax(theta, x_eval, J)
+      p <- model$p
+      beta <- model$beta
     }
     for (k in var_colNo) {
       if (effect == "marginal") {
         # dp_ij/dx_ik = p_ij (beta_jk - sum_h p_ih beta_hk).
-        # Every K-th element selects covariate k in alternative-major order.
-        beta_k <- c(0, theta[seq.int(k, d, by = K)])
+        beta_k <- beta[, k]
         beta_bar <- as.vector(p %*% beta_k)
         marg_mat <- sweep(p, 2L, beta_k, FUN = "*") - p * beta_bar
       } else {
@@ -154,33 +158,33 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
         x_min <- x_max <- x_eval
         x_min[, k] <- min(x[, k])
         x_max[, k] <- max(x[, k])
-        marg_mat <- softmax(theta, x_max, J)$probabilities -
-          softmax(theta, x_min, J)$probabilities
+        marg_mat <- softmax(theta, x_max, J)$p - softmax(theta, x_min, J)$p
       }
       dimnames(marg_mat) <- list(rownames(x_eval), ynames)
-      xmarg[, xnames[k]] <- colMeans(marg_mat)
+      effects_mat[, xnames[k]] <- colMeans(marg_mat)
       if (keep) marg_list[[xnames[k]]] <- marg_mat
     }
-    list(effects = xmarg, marg.list = marg_list)
+    list(effects = effects_mat, marg.list = marg_list)
   }
 
   result <- evaluate(theta_hat, keep = marg.type == "aveacr")
   outlist <- list(effects = result$effects)
   if (se) {
-    v <- object$vcov_full
-    if (!is.matrix(v) || !is.numeric(v) || !identical(dim(v), c(d, d)) ||
-        any(!is.finite(v)) || !isSymmetric(v, tol = 1e-8)) {
+    vcov_full <- object$vcov_full
+    if (!is.matrix(vcov_full) || !is.numeric(vcov_full) ||
+        !identical(dim(vcov_full), c(d, d)) || any(!is.finite(vcov_full)) ||
+        !isSymmetric(vcov_full, tol = 1e-8)) {
       stop("'object$vcov_full' must be a finite, symmetric d-by-d joint covariance matrix.")
     }
     # A symmetric eigen square root also permits singular HC0 covariance.
     # Clip only round-off negatives; materially negative eigenvalues are invalid.
-    v <- (v + t(v)) / 2
-    ee <- eigen(v, symmetric = TRUE)
-    tol <- 1e-8 * max(abs(ee$values))
-    if (any(ee$values < -tol)) {
+    vcov_full <- (vcov_full + t(vcov_full)) / 2
+    eigen_vcov <- eigen(vcov_full, symmetric = TRUE)
+    tol <- 1e-8 * max(abs(eigen_vcov$values))
+    if (any(eigen_vcov$values < -tol)) {
       stop("The joint covariance matrix must be positive semidefinite.")
     }
-    root <- sweep(ee$vectors, 2L, sqrt(pmax(ee$values, 0)), FUN = "*")
+    root <- sweep(eigen_vcov$vectors, 2L, sqrt(pmax(eigen_vcov$values, 0)), FUN = "*")
 
     # Simulation-based Krinsky-Robb inference:
     # theta^(r) = theta_hat + root z^(r), z^(r) ~ N(0, I_d).
@@ -192,14 +196,10 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
       marg_draws[r, ] <- evaluate(theta_draws[r, ])$effects
     }
     # se(g) = sqrt(sum_r (g(theta^(r)) - mean_r g(theta^(r)))^2 / (R - 1)).
-    se_mat <- matrix(apply(marg_draws, 2L, stats::sd), J, length(var_colNo),
+    se_mat <- matrix(apply(marg_draws, 2L, stats::sd), J, n_vars,
                      dimnames = dimnames(outlist$effects))
     tabout <- lapply(varlist, function(variable) {
-      est <- outlist$effects[, variable]
-      std <- se_mat[, variable]
-      z <- est / std
-      cbind(estimate = est, std = std, z = z,
-            "p-value" = 2 * stats::pnorm(abs(z), lower.tail = FALSE))
+      wald_table(outlist$effects[, variable], se_mat[, variable])
     })
     names(tabout) <- varlist
     outlist$se <- se_mat

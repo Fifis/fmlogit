@@ -1,17 +1,18 @@
-#' Plot partial effects and willingness to pay
+#' Plot partial effects and user-valued aggregates
 #'
 #' @name plot.fmlogit
 #' @aliases plot.fmlogit.margins
 #' @description
-#' Plot observation-level marginal or discrete effects, or their weighted
-#' willingness-to-pay aggregates, using base R graphics.
+#' Plot observation-level marginal or discrete effects, or their user-valued
+#' aggregates from \code{wtp()}, using base R graphics.
 #'
 #' @param x An \code{"fmlogit.margins"} object computed with
-#'   \code{marg.type = "aveacr"}, or an \code{"fmlogit"} fit for WTP plots.
+#'   \code{marg.type = "aveacr"}, or an \code{"fmlogit"} fit for aggregate plots.
 #' @param varlist Covariate names to plot, in the desired order. Defaults to
 #'   all available effects, excluding the intercept for a fitted model.
-#' @param x_data,y Optional covariate and response matrices aligned with the retained
-#'   observations. Used by the margins method for named axes or groups.
+#' @param x_data,y Optional design and observed-share matrices, such as
+#'   \code{fit$x} and \code{fit$y}, aligned with the retained observations.
+#'   Used by the margins method for named axes or groups.
 #' @param against For margins, a numeric vector of horizontal coordinates.
 #'   For a fitted model, a non-intercept design-column name: vary that column
 #'   from its observed minimum to maximum, fixing others at their means.
@@ -25,13 +26,13 @@
 #' @param mfrow Optional two-element panel layout, as in \code{par(mfrow = ...)}.
 #'   By default, use a layout close to square. Graphics settings are restored.
 #' @param type Base graphics plot type; defaults to points for margins and
-#'   lines for WTP. Lines connect increasing horizontal coordinates within groups.
+#'   lines for aggregates. Lines connect increasing horizontal coordinates within groups.
 #' @param plot.show Logical; draw the plots? Plotting data are returned either way.
 #' @param xlab Optional horizontal-axis label.
 #' @param wtp.vec Numeric outcome values, in the order of the fitted outcome columns.
 #' @param t Number of evaluation points when varying \code{against}.
 #' @param effect Either \code{"discrete"} (the default) or \code{"marginal"}.
-#' @param se Compute pointwise WTP standard errors and draw plus/minus one SE?
+#' @param se Compute pointwise aggregate SEs and draw plus/minus one SE?
 #'   Defaults to \code{FALSE}.
 #' @param R Number of Krinsky-Robb draws per evaluation point when \code{se = TRUE}.
 #' @param ... Base graphics options, including \code{col}, \code{pch},
@@ -40,7 +41,7 @@
 #' @details
 #' The margins method plots the stored observation-level effects. Their
 #' standard errors are unavailable: the stored SEs describe average effects,
-#' and is not an estimate of each observation's uncertainty.
+#' not the uncertainty of each observation-level effect.
 #'
 #' The fitted-model method aggregates effects using \code{wtp.vec}. Optional
 #' pointwise SEs use \code{effects.fmlogit()} and the existing independence
@@ -48,12 +49,15 @@
 #' They condition on the evaluation design and can be slow to simulate.
 #' Use \code{set.seed()} for reproducible SEs. The bars represent one SE,
 #' rather than a particular confidence level.
+#' Effects refer to processed design columns; varying one column does not
+#' update related factor indicators, powers, or interactions. See
+#' \code{effects.fmlogit()} for the reference-profile and averaging definitions.
 #'
 #' @return Invisibly, a list with \code{x}, the horizontal coordinates;
 #'   \code{effects}, a matrix with one row per coordinate and one column per
 #'   panel; \code{se}, a matching matrix or \code{NULL}; and \code{group}, a
 #'   factor or \code{NULL}. Margins columns are named \code{variable:outcome};
-#'   WTP columns are covariate names. Rows retain their input order even when
+#'   Aggregate columns are covariate names. Rows retain their input order even when
 #'   lines are drawn in coordinate order.
 #'
 #' @examples
@@ -122,12 +126,12 @@ plot.fmlogit.margins <- function(x, varlist = NULL, x_data = NULL, y = NULL,
     group <- factor(group)
   }
 
-  plot_estimates <- do.call(cbind, object$marg.list[varlist])
-  colnames(plot_estimates) <- paste(rep(varlist, each = J), rep(ynames, times = length(varlist)), sep = ":")
-  plot_data <- list(x = against, effects = plot_estimates, se = NULL, group = group)
+  effects_mat <- do.call(cbind, object$marg.list[varlist])
+  colnames(effects_mat) <- paste(rep(varlist, each = J), rep(ynames, times = length(varlist)), sep = ":")
+  plot_data <- list(x = against, effects = effects_mat, se = NULL, group = group)
   if (plot.show) {
     if (is.null(xlab)) xlab <- axis_label
-    draw_effects(against, plot_estimates, group = group, mfrow = mfrow, type = type,
+    draw_effects(against, effects_mat, group = group, mfrow = mfrow, type = type,
                  xlab = xlab, ...)
   }
   invisible(plot_data)
@@ -150,8 +154,9 @@ plot.fmlogit <- function(x, wtp.vec, varlist = NULL, against = NULL,
   K <- ncol(x)
   xnames <- colnames(x)
   varlist <- plot_variables(varlist, xnames)
-  if (!is.numeric(wtp.vec) || length(wtp.vec) != J || any(!is.finite(wtp.vec))) {
-    stop("'wtp.vec' must contain one finite numeric value per outcome.")
+  if (!is.numeric(wtp.vec) || !is.null(dim(wtp.vec)) ||
+      length(wtp.vec) != J || any(!is.finite(wtp.vec))) {
+    stop("'wtp.vec' must be a finite numeric vector with one value per outcome.")
   }
   if (!is.logical(se) || length(se) != 1L || is.na(se)) stop("'se' must be TRUE or FALSE.")
 
@@ -173,23 +178,23 @@ plot.fmlogit <- function(x, wtp.vec, varlist = NULL, against = NULL,
   if (is.null(against) && !se) {
     # Compute observation-level effects in a single call.
     margins <- effects.fmlogit(object, effect = effect, marg.type = "aveacr", varlist = varlist)
-    plot_estimates <- wtp(margins, wtp.vec, indv.obs = TRUE)$wtp.obs
+    effects_mat <- wtp(margins, wtp.vec, indv.obs = TRUE)$wtp.obs
   } else {
-    plot_estimates <- matrix(NA_real_, nrow(x_eval), length(varlist),
+    effects_mat <- matrix(NA_real_, nrow(x_eval), length(varlist),
                     dimnames = list(rownames(x_eval), varlist))
-    if (se) se_mat <- plot_estimates
+    if (se) se_mat <- effects_mat
     for (i in seq_len(nrow(x_eval))) {
       margins <- effects.fmlogit(object, effect = effect, varlist = varlist,
                                 at = x_eval[i, -1L], se = se, R = R)
       result <- wtp(margins, wtp.vec)
-      plot_estimates[i, ] <- if (se) result$wtp[, "estimate"] else result$wtp[1L, ]
+      effects_mat[i, ] <- if (se) result$wtp[, "estimate"] else result$wtp[1L, ]
       if (se) se_mat[i, ] <- result$wtp[, "std"]
     }
   }
-  plot_data <- list(x = against_values, effects = plot_estimates, se = se_mat, group = NULL)
+  plot_data <- list(x = against_values, effects = effects_mat, se = se_mat, group = NULL)
   if (plot.show) {
     if (is.null(xlab)) xlab <- if (is.null(against)) "Observation" else against
-    draw_effects(against_values, plot_estimates, se = se_mat, mfrow = mfrow, type = type,
+    draw_effects(against_values, effects_mat, se = se_mat, mfrow = mfrow, type = type,
                  xlab = xlab, ...)
   }
   invisible(plot_data)
@@ -211,11 +216,11 @@ plot_column <- function(data, column, N) {
   data[, column]
 }
 
-draw_effects <- function(against, plot_estimates, se = NULL, group = NULL, mfrow = NULL,
+draw_effects <- function(against, effects_mat, se = NULL, group = NULL, mfrow = NULL,
                          type = "p", xlab = "Observation", ylab = "Effect",
-                         main = colnames(plot_estimates), ylim = NULL, col = NULL,
+                         main = colnames(effects_mat), ylim = NULL, col = NULL,
                          pch = 1, lty = 1, cex = 1, ...) {
-  n_panels <- ncol(plot_estimates)
+  n_panels <- ncol(effects_mat)
   if (is.null(mfrow)) {
     side <- ceiling(sqrt(n_panels))
     mfrow <- c(ceiling(n_panels / side), side)
@@ -239,20 +244,20 @@ draw_effects <- function(against, plot_estimates, se = NULL, group = NULL, mfrow
 
   for (panel in seq_len(n_panels)) {
     limits <- if (is.null(ylim)) {
-      range(0, plot_estimates[, panel], if (!is.null(se)) c(plot_estimates[, panel] - se[, panel],
-                                                 plot_estimates[, panel] + se[, panel]), finite = TRUE)
+      range(0, effects_mat[, panel], if (!is.null(se)) c(effects_mat[, panel] - se[, panel],
+                                                 effects_mat[, panel] + se[, panel]), finite = TRUE)
     } else ylim
-    graphics::plot(against, plot_estimates[, panel], type = "n", xlab = xlab, ylab = ylab,
+    graphics::plot(against, effects_mat[, panel], type = "n", xlab = xlab, ylab = ylab,
                    main = main[panel], ylim = limits, ...)
     graphics::abline(h = 0, col = "grey70", lty = 3)
     for (level in seq_len(n_groups)) {
-      index <- which(group == levels(group)[level])
-      index <- index[order(against[index])]
+      i <- which(group == levels(group)[level])
+      i <- i[order(against[i])]
       if (!is.null(se)) {
-        graphics::segments(against[index], plot_estimates[index, panel] - se[index, panel],
-                           against[index], plot_estimates[index, panel] + se[index, panel], col = col[level])
+        graphics::segments(against[i], effects_mat[i, panel] - se[i, panel],
+                           against[i], effects_mat[i, panel] + se[i, panel], col = col[level])
       }
-      graphics::points(against[index], plot_estimates[index, panel], type = type,
+      graphics::points(against[i], effects_mat[i, panel], type = type,
                        col = col[level], pch = pch[level], lty = lty[level], cex = cex)
     }
     if (show_legend) {
