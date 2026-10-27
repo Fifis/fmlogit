@@ -15,7 +15,8 @@
 #'   Used by the margins method for named axes or groups.
 #' @param against For margins, a numeric vector of horizontal coordinates.
 #'   For a fitted model, a non-intercept design-column name: vary that column
-#'   from its observed minimum to maximum, fixing others at their means.
+#'   from its minimum to maximum among positive-weight observations, fixing
+#'   other columns at their fitted-weight means.
 #'   The default in both methods is to plot the observed effects by row number.
 #' @param against.x,against.y Column name in \code{x_data} or \code{y} to use as the
 #'   horizontal axis. Supply only one of the three axis arguments.
@@ -44,11 +45,14 @@
 #' not the uncertainty of each observation-level effect.
 #'
 #' The fitted-model method aggregates effects using \code{wtp.vec}. Optional
-#' pointwise SEs use \code{effects.fmlogit()} and the existing independence
-#' approximation in \code{wtp()}; they omit covariance between outcome effects.
-#' They condition on the evaluation design and can be slow to simulate.
+#' pointwise SEs use the joint outcome-effect covariance from
+#' \code{effects.fmlogit()} through \code{wtp()}. They condition on the
+#' evaluation design and fitted weights and can be slow to simulate.
 #' Use \code{set.seed()} for reproducible SEs. The bars represent one SE,
 #' rather than a particular confidence level.
+#' Grid profiles inherit observation weights for their fixed design means and
+#' observed range. Observation-level plots retain every row, including
+#' zero-weight observations, without rescaling the individual effects.
 #' Effects refer to processed design columns; varying one column does not
 #' update related factor indicators, powers, or interactions. See
 #' \code{effects.fmlogit()} for the reference-profile and averaging definitions.
@@ -154,6 +158,7 @@ plot.fmlogit <- function(x, wtp.vec, varlist = NULL, against = NULL,
   K <- ncol(x)
   xnames <- colnames(x)
   varlist <- plot_variables(varlist, xnames)
+  weights <- fit_weights(object)
   if (!is.numeric(wtp.vec) || !is.null(dim(wtp.vec)) ||
       length(wtp.vec) != J || any(!is.finite(wtp.vec))) {
     stop("'wtp.vec' must be a finite numeric vector with one value per outcome.")
@@ -168,8 +173,9 @@ plot.fmlogit <- function(x, wtp.vec, varlist = NULL, against = NULL,
     if (!is.numeric(t) || length(t) != 1L || !is.finite(t) || t < 1 || t != floor(t)) {
       stop("'t' must be a positive integer.")
     }
-    against_values <- seq(min(x[, k]), max(x[, k]), length.out = t)
-    x_eval <- matrix(rep(colMeans(x), each = t), nrow = t, ncol = K,
+    support <- x[weights > 0, k]
+    against_values <- seq(min(support), max(support), length.out = t)
+    x_eval <- matrix(rep(weighted_colMeans(x, weights), each = t), nrow = t, ncol = K,
                      dimnames = list(NULL, xnames))
     x_eval[, k] <- against_values
   }
@@ -187,8 +193,8 @@ plot.fmlogit <- function(x, wtp.vec, varlist = NULL, against = NULL,
       margins <- effects.fmlogit(object, effect = effect, varlist = varlist,
                                 at = x_eval[i, -1L], se = se, R = R)
       result <- wtp(margins, wtp.vec)
-      effects_mat[i, ] <- if (se) result$wtp[, "estimate"] else result$wtp[1L, ]
-      if (se) se_mat[i, ] <- result$wtp[, "std"]
+      effects_mat[i, ] <- if (se) result$wtp[, "Estimate"] else result$wtp[1L, ]
+      if (se) se_mat[i, ] <- result$wtp[, "Std. Error"]
     }
   }
   plot_data <- list(x = against_values, effects = effects_mat, se = se_mat, group = NULL)

@@ -35,7 +35,9 @@ test_that("WTP plots agree with individual effects and inference at grid points"
   p_other <- stats::plogis(0.2 + 0.5 * x[, "income"] - 0.3 * x[, "indicator"])
   share <- stats::rbinom(N, 20L, p_other) / 20
   y <- cbind(base = 1 - share, other = share)
-  object <- fmlogit(y, x, method = "BFGS", print.level = 0L)
+  weights <- seq(0.5, 3, length.out = N)
+  weights[c(1L, N)] <- 0
+  object <- fmlogit(y, x, weights = weights, method = "BFGS", print.level = 0L)
   varlist <- c("indicator", "income")
   wtp.vec <- c(0, 100)
 
@@ -50,13 +52,14 @@ test_that("WTP plots agree with individual effects and inference at grid points"
   set.seed(7)
   result <- plot(object, wtp.vec, varlist, against = "income", t = 3L,
                  effect = "marginal", se = TRUE, R = 30L, plot.show = FALSE)
-  at <- colMeans(object$x[, -1L, drop = FALSE])
-  at["income"] <- min(x[, "income"])
+  at <- apply(object$x[, -1L, drop = FALSE], 2L, stats::weighted.mean, w = weights)
+  support <- x[weights > 0, "income"]
+  at["income"] <- min(support)
   set.seed(7)
   margins <- effects.fmlogit(object, effect = "marginal", varlist = varlist,
                              at = at, se = TRUE, R = 30L)
   expected <- wtp(margins, wtp.vec)$wtp
-  expect_equal(result$x, seq(min(x[, "income"]), max(x[, "income"]), length.out = 3L))
-  expect_equal(unname(result$effects[1L, ]), unname(expected[, "estimate"]))
-  expect_equal(unname(result$se[1L, ]), unname(expected[, "std"]))
+  expect_equal(result$x, seq(min(support), max(support), length.out = 3L))
+  expect_equal(unname(result$effects[1L, ]), unname(expected[, "Estimate"]))
+  expect_equal(unname(result$se[1L, ]), unname(expected[, "Std. Error"]))
 })

@@ -69,6 +69,8 @@ initEst <- function(y, x, weights = NULL) {
       !any(weights > 0)) {
     stop("'weights' must be nonnegative, finite, aligned with 'y', and not all zero.")
   }
+  # Relative weights can be rescaled without changing the pairwise estimates.
+  weights <- weights / mean(weights)
   
   if (is.null(colnames(y))) colnames(y) <- paste0("share", seq_len(J))
   if (is.null(colnames(x))) {
@@ -132,7 +134,11 @@ initEst <- function(y, x, weights = NULL) {
 #' @param weights Optional nonnegative observation weights, length `N`. The
 #'   default is equal weights. These relative weights multiply the individual
 #'   quasi-log-likelihood contributions; rescaling them leaves estimates and
-#'   the HC0 covariance unchanged. They are not frequency weights.
+#'   the HC0 covariance unchanged. They are inherited by mean profiles and
+#'   average partial effects. They are not frequency weights, and weights alone
+#'   do not specify a complex survey design.
+#'   Computation normalises weights to mean one for numerical stability;
+#'   the object retains the original weights and quasi-log-likelihood scale.
 #' @param beta0 Optional starting coefficients, length `(J-1) * K`, where `K` is
 #'   the number of columns in the *processed* design matrix including the
 #'   intercept. Ordered by non-baseline outcome, with the intercept first in
@@ -158,6 +164,11 @@ initEst <- function(y, x, weights = NULL) {
 #' as per \insertCite{mullahy2015multivariate}{fmlogit}.
 #' The joint HC0 covariance uses the inverse weighted negative Hessian as
 #' bread and the outer product of the weighted *full* scores as meat.
+#' For unweighted scores \eqn{s_i}, this is
+#' \eqn{H^{-1}(\sum_i w_i^2 s_i s_i')H^{-1}}, where
+#' \eqn{H = -\sum_i w_i\partial s_i/\partial\theta'}.
+#' The squared weights arise because each score already contains its weight;
+#' they must not be replaced by a single weight as in frequency replication.
 #' This is an independent-observation sandwich estimator: weights alone do not
 #' account for survey clusters, strata, or finite-population corrections
 #' \insertCite{papke1996econometric}{fmlogit}.
@@ -211,6 +222,8 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
   x_data <- x_data[keep_rows, , drop = FALSE]
   weights <- weights[keep_rows]
   if (!any(weights > 0)) stop("All retained observation weights are zero.")
+  weight_scale <- mean(weights)
+  optim_weights <- weights / weight_scale
   
   if (any(!is.finite(y)) || any(y < 0 | y > 1) || any(abs(rowSums(y) - 1) > 1e-8)) {
     stop("'y' must contain finite shares in [0, 1], each row summing to one.")
@@ -260,14 +273,14 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
   # Quasi-log-likelihood contributions: N-vector.
   loglik_obs <- function(theta) {
     model <- softmax(theta, x, J)
-    weights * (rowSums(y * model$eta) - totals * model$log_denom)
+    optim_weights * (rowSums(y * model$eta) - totals * model$log_denom)
   }
   
-  # Observation-wise weighted scores: N x d, in optimizer parameter order.
+  # Weighted scores psi_i = w_i s_i: N x d, in optimizer parameter order.
   score_obs <- function(theta) {
     p <- softmax(theta, x, J)$p
     residual <- y - p * totals
-    do.call(cbind, lapply(nonbase, function(j) x * (weights * residual[, j])))
+    do.call(cbind, lapply(nonbase, function(j) x * (optim_weights * residual[, j])))
   }
   
   # Exact Hessian of the weighted objective, d x d (negative semidefinite).
@@ -276,7 +289,7 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
     hess <- matrix(0, d, d)
     for (j in nonbase) {
       for (h in nonbase) {
-        curvature <- weights * totals * p[, j] * (as.numeric(j == h) - p[, h])
+        curvature <- optim_weights * totals * p[, j] * (as.numeric(j == h) - p[, h])
         hess[blocks[[j - 1L]], blocks[[h - 1L]]] <- crossprod(x, x * curvature)
       }
     }
@@ -309,7 +322,9 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
     warning("The optimizer did not report ordinary convergence: ", opt$message)
   }
   
-  # Robust joint sandwich covariance: (H^{-1}) (S'S) (H^{-1}).
+  # Joint HC0: H^{-1} sum_i(w_i^2 s_i s_i') H^{-1}.
+  # H uses w_i once; scores already include w_i, so crossprod uses w_i^2.
+  # Using optim_weights gives the same covariance: the common scale cancels.
   bread <- -hessian(theta_hat)
   if (any(!is.finite(bread)) || rcond(bread) < 1e-12) {
     stop("The joint weighted Hessian is singular or poorly conditioned; robust covariance estimation is unavailable.")
@@ -351,7 +366,7 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
     estimates = tabout,
     init.val = theta_init,
     baseline = ynames[1L],
-    likelihood = opt$maximum,
+    likelihood = opt$maximum * weight_scale,
     conv_code = as.integer(opt$code),
     convergence = paste(opt$type, paste(opt$iterations, "iterations"), opt$message, sep = ", "),
     count = c(Obs = N, Explanatories = K - 1L, Choices = J),

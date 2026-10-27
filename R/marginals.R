@@ -7,9 +7,9 @@
 #'
 #' @param object An object of class \code{"fmlogit"}.
 #' @param effect Either \code{"marginal"} for derivatives or \code{"discrete"}
-#'   for changes from the observed minimum to the observed maximum.
+#'   for changes from the minimum to the maximum among positive-weight rows.
 #' @param marg.type Either \code{"atmean"} (the default) to evaluate effects at
-#'   the mean design, or \code{"aveacr"} to average observation-level effects.
+#'   the weighted mean design, or \code{"aveacr"} for weighted average effects.
 #' @param se Logical; compute simulation-based Krinsky-Robb standard errors?
 #' @param varlist Character vector of column names in \code{object$x}, in the
 #'   desired output order. By default, all columns except the first, intercept
@@ -31,12 +31,12 @@
 #' maximum, keeping all other columns fixed, and subtract the resulting shares.
 #' Effects sum to zero across outcomes because the fitted shares sum to one.
 #'
-#' For \code{"atmean"}, the reference profile uses arithmetic design means,
-#' unless \code{at} supplies their values. Discrete effects still replace the
-#' selected column by its observed endpoints. For \code{"aveacr"}, the effects are
-#' computed for each retained observation and then averaged arithmetically.
-#' Estimation weights affect the fitted coefficients and their covariance;
-#' they do not reweight these means or the observed minimum and maximum.
+#' Both summaries inherit \code{object$weights}, normalised to sum to one.
+#' For \code{"atmean"}, the reference profile uses weighted design means,
+#' unless \code{at} supplies their values. For \code{"aveacr"}, the effects are
+#' computed for each retained observation and then averaged with these weights.
+#' Discrete endpoints are the minimum and maximum among positive-weight rows.
+#' Individual effects remain unweighted values, including on zero-weight rows.
 #' Effects refer to processed design columns. For factor indicators and
 #' interactions, changing one column does not reconstruct the original data
 #' or update related design columns.
@@ -45,12 +45,16 @@
 #' coefficient vector from its estimated joint normal distribution,
 #' \eqn{\theta^{(r)} \sim N(\hat\theta, \widehat{\mathrm{Var}}(\hat\theta))}.
 #' Each draw preserves the baseline normalization and recomputes the requested
-#' effect using the same design values and averaging rule. The sample standard
-#' deviation across draws estimates the standard error. This uses
+#' effect using the same design values and observation weights. The ordinary,
+#' unweighted sample covariance across draws estimates effect uncertainty;
+#' simulation draws do not carry survey weights. This uses
 #' \code{object$vcov_full}, including covariance between outcomes and covariates,
-#' and conditions on the observed design. Use \code{set.seed()} for reproducible
-#' simulations. The reported z statistics and two-sided p-values use a normal
-#' approximation.
+#' and conditions on the observed design and weights. This is coefficient
+#' uncertainty, not the weighted dispersion of individual effects. It does not
+#' include uncertainty in the covariate distribution or account for survey
+#' clusters, strata, or finite-population corrections. Use \code{set.seed()}
+#' for reproducible simulations. The reported z statistics and two-sided
+#' p-values use a normal approximation.
 #'
 #' @return An object of class \code{"fmlogit.margins"} with:
 #' \describe{
@@ -60,6 +64,10 @@
 #'   tables, present if \code{se = TRUE}.}
 #' \item{marg.list}{A named list of \code{N}-by-\code{J} observation-level effect
 #'   matrices, present for \code{marg.type = "aveacr"}.}
+#' \item{weights}{The retained observation weights inherited from the fit.}
+#' \item{cov.list}{A named list of \code{J}-by-\code{J} covariance matrices
+#'   between outcome effects for each selected covariate, present if
+#'   \code{se = TRUE}. Used for joint aggregate inference in \code{wtp()}.}
 #' \item{R}{The number of simulation draws, or zero if \code{se = FALSE}.}
 #' \item{expl}{A brief description of the effects and inference.}
 #' }
@@ -103,6 +111,8 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
       any(!is.finite(theta_hat))) {
     stop("'object' must contain the current fmlogit design and coefficients.")
   }
+  weights <- fit_weights(object)
+  positive <- weights > 0
 
   xnames <- colnames(x)
   ynames <- colnames(y)
@@ -119,21 +129,22 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
     stop("'at' is only supported for 'marg.type = \"atmean\"'.")
   }
   marg.type.out <- if (marg.type == "aveacr") {
-    "average across observations,"
+    "weighted average across observations,"
   } else if (is.null(at)) {
-    "at the mean,"
+    "at the weighted mean,"
   } else {
     "at the evaluation point,"
   }
   x_eval <- x
   if (marg.type == "atmean") {
-    if (is.null(at)) at <- colMeans(x[, -1L, drop = FALSE])
+    if (is.null(at)) at <- weighted_colMeans(x[, -1L, drop = FALSE], weights)
     if (!is.numeric(at) || !is.null(dim(at)) || length(at) != K - 1L ||
         any(!is.finite(at))) {
       stop("'at' must be a finite numeric vector of length K - 1, excluding the intercept.")
     }
     x_eval <- matrix(c(1, at), nrow = 1L, dimnames = list(NULL, xnames))
   }
+  eval_weights <- if (marg.type == "aveacr") weights else 1
 
   # Evaluate the same statistic for the fitted coefficients and every KR draw.
   evaluate <- function(theta, keep = FALSE) {
@@ -153,22 +164,23 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
         beta_bar <- as.vector(p %*% beta_k)
         marg_mat <- sweep(p, 2L, beta_k, FUN = "*") - p * beta_bar
       } else {
-        # Delta_ijk = p_j(x_i with x_ik = max x_k)
-        #             - p_j(x_i with x_ik = min x_k).
+        # Use endpoints of the support with positive observation weight.
+        # Delta_ijk = p_j(x_i with x_ik = max x_k) - p_j(x_i with x_ik = min x_k).
         x_min <- x_max <- x_eval
-        x_min[, k] <- min(x[, k])
-        x_max[, k] <- max(x[, k])
+        x_min[, k] <- min(x[positive, k])
+        x_max[, k] <- max(x[positive, k])
         marg_mat <- softmax(theta, x_max, J)$p - softmax(theta, x_min, J)$p
       }
       dimnames(marg_mat) <- list(rownames(x_eval), ynames)
-      effects_mat[, xnames[k]] <- colMeans(marg_mat)
+      # AME_jk = sum_i w_i m_ijk / sum_i w_i; at a profile there is one row.
+      effects_mat[, xnames[k]] <- weighted_colMeans(marg_mat, eval_weights)
       if (keep) marg_list[[xnames[k]]] <- marg_mat
     }
     list(effects = effects_mat, marg.list = marg_list)
   }
 
   result <- evaluate(theta_hat, keep = marg.type == "aveacr")
-  outlist <- list(effects = result$effects)
+  outlist <- list(effects = result$effects, weights = weights)
   if (se) {
     vcov_full <- object$vcov_full
     if (!is.matrix(vcov_full) || !is.numeric(vcov_full) ||
@@ -195,15 +207,24 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
     for (r in seq_len(R)) {
       marg_draws[r, ] <- evaluate(theta_draws[r, ])$effects
     }
-    # se(g) = sqrt(sum_r (g(theta^(r)) - mean_r g(theta^(r)))^2 / (R - 1)).
-    se_mat <- matrix(apply(marg_draws, 2L, stats::sd), J, n_vars,
-                     dimnames = dimnames(outlist$effects))
+    # Each draw has already used the observation weights. Across IID draws,
+    # use ordinary covariance (R - 1 denominator), retaining outcome covariance.
+    cov_list <- lapply(seq_len(n_vars), function(k) {
+      block <- seq_len(J) + (k - 1L) * J
+      vcov_k <- stats::cov(marg_draws[, block, drop = FALSE])
+      dimnames(vcov_k) <- list(ynames, ynames)
+      vcov_k
+    })
+    names(cov_list) <- varlist
+    se_mat <- vapply(cov_list, function(vcov_k) sqrt(pmax(0, diag(vcov_k))), numeric(J))
+    dimnames(se_mat) <- dimnames(outlist$effects)
     tabout <- lapply(varlist, function(variable) {
       wald_table(outlist$effects[, variable], se_mat[, variable])
     })
     names(tabout) <- varlist
     outlist$se <- se_mat
     outlist$ztable <- tabout
+    outlist$cov.list <- cov_list
   }
   if (marg.type == "aveacr") outlist$marg.list <- result$marg.list
   outlist$R <- if (se) R else 0

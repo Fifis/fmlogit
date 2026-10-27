@@ -32,8 +32,8 @@ test_that("Rounding p-values cannot give a nonsignificant estimate a star", {
 
   # A p-value just above 5% must remain nonsignificant after table formatting.
   fit$estimates[[1L]][, 4L] <- 0.05001
-  margins$ztable$income[, "p-value"] <- 0.05001
-  aggregate$wtp[, "p-value"] <- 0.05001
+  margins$ztable$income[, "Pr(>|z|)"] <- 0.05001
+  aggregate$wtp[, "Pr(>|z|)"] <- 0.05001
   sigcode <- c(0.05, 0.01, 0.001)
   tables <- list(
     summary(fit, add.info = FALSE, sigcode = sigcode)$estimates,

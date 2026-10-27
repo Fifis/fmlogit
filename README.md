@@ -100,7 +100,8 @@ y <- t(vapply(seq_len(N), function(i) {
 }, numeric(3)))
 colnames(y) <- colnames(p)
 
-fit <- fmlogit(y, x, print.level = 0)
+weights <- ifelse(x$urban == 1, 2, 1)
+fit <- fmlogit(y, x, weights = weights, print.level = 0)
 summary(fit)
 head(fitted(fit))
 ```
@@ -108,6 +109,9 @@ head(fitted(fit))
 The rows of `y` are observations and its columns are outcome shares.
 The rows of `x` describe the same observations. Here `home` is the
 baseline because it is the first column of `y`.
+The illustrative weights give urban observations twice the weight of other
+observations. In a survey application, supply the appropriate sampling
+weights for the population you want to describe.
 
 ## Why use fmlogit in R?
 
@@ -140,9 +144,10 @@ An intercept is added as the first design column, and supplied constant
 columns are removed. Other redundant columns cause a rank-deficiency
 error, so the design still needs to identify the model.
 
-Optional nonnegative observation weights enter both estimation and its
-robust covariance calculation. Optimisation is handled by `maxLik`, with
-several methods available.
+Optional nonnegative observation weights enter estimation, its robust
+covariance calculation, and the mean profiles and average effects used
+after fitting. Optimisation is handled by `maxLik`, with several methods
+available.
 
 ### 4. Aggregates with user-supplied values
 
@@ -150,8 +155,8 @@ Sometimes a change in allocation is useful to express as a weighted total.
 For example, categories may have different costs, returns, or external
 valuations. The `wtp()` function multiplies their share effects by values
 you supply and adds the results. The interpretation and units depend on
-those supplied values; details and the current inference limitation are
-given below.
+those supplied values. Their standard errors retain covariance between
+the outcome effects being combined.
 
 ## How does the estimator work?
 
@@ -191,6 +196,14 @@ The package computes an HC0 sandwich covariance matrix for the full joint
 coefficient vector, using observation-level scores and the weighted
 Hessian. This retains covariance between coefficients for different
 outcomes, which matters for joint inference.
+
+The Hessian uses each observation's weight once, while the score outer
+products use its square. Multiplying every weight by the same positive
+constant leaves the estimates and HC0 covariance unchanged. These are
+relative observation weights, rather than counts of replicated records.
+The optimizer uses weights scaled to mean one, so their absolute units
+do not alter its step sizes. Stored weights and the reported
+quasi-log-likelihood retain the input scale.
 
 Mullahy explains why ordinary multinomial-logit inverse-Hessian standard
 errors are generally unsuitable for fractional shares. Shares can be less
@@ -241,9 +254,10 @@ covariate. It is a slope; a large finite change may have a different
 average slope.
 
 A **discrete effect** compares fitted shares at two covariate values. The
-package changes the selected design column from its observed minimum to
-its observed maximum while holding other columns fixed. For an observed
-zero-or-one variable, this is the change from zero to one.
+package changes the selected design column from its minimum to its
+maximum among observations with positive weight, while holding other
+columns fixed. For a zero-or-one variable with both values represented
+at positive weight, this is the change from zero to one.
 
 For either kind of effect, the changes across all outcome categories sum
 to zero. A gain in one share must be offset by losses elsewhere in the
@@ -255,8 +269,16 @@ Two summaries answer different questions:
 
 | Option | Calculation | Interpretation |
 | --- | --- | --- |
-| `marg.type = "atmean"` | Use the mean design profile, replacing the selected column by its endpoints for a discrete effect. | The effect at one reference profile. |
-| `marg.type = "aveacr"` | Evaluate effects for each retained observation, then take their arithmetic average. | The average effect across the observed profiles. |
+| `marg.type = "atmean"` | Use the weighted mean design profile, replacing the selected column by its endpoints for a discrete effect. | The effect at one reference profile. |
+| `marg.type = "aveacr"` | Evaluate effects for each retained observation, then average using the fitted model's observation weights. | The average effect for the distribution represented by those weights. |
+
+With normalized weights $\alpha_i = w_i / \sum_h w_h$, average effects
+are $\sum_i \alpha_i m_{ijk}$, where $m_{ijk}$ is an individual effect.
+The default reference profile is $\bar x_w = \sum_i \alpha_i x_i$.
+Equal weights give the usual arithmetic means. Zero-weight observations
+do not contribute to these summaries or determine automatic endpoints.
+This weighted averaging follows Mullahy's Appendix 1; whether the result
+represents a population depends on the meaning and validity of the weights.
 
 The default is `"atmean"`. In a nonlinear model, the effect at the mean
 generally differs from the mean of the effects. A mean profile can also
@@ -276,7 +298,8 @@ ame <- effects.fmlogit(
 summary(ame)
 
 urban_change <- effects.fmlogit(
-  fit, effect = "discrete", marg.type = "aveacr", varlist = "urban"
+  fit, effect = "discrete", marg.type = "aveacr", varlist = "urban",
+  se = TRUE, R = 1000
 )
 urban_change$effects
 ```
@@ -284,13 +307,14 @@ urban_change$effects
 With `marg.type = "atmean"`, `at` supplies a custom reference profile:
 
 ```r
-at <- colMeans(fit$x[, -1, drop = FALSE])
+at <- colSums(fit$x[, -1, drop = FALSE] * fit$weights) / sum(fit$weights)
 at["income"] <- 0
 effects.fmlogit(fit, varlist = "income", at = at)$effects
 ```
 
 The values in `at` must follow the non-intercept column order of
-`fit$x`. For multi-level factors or interactions, a change in one design
+`fit$x`. An explicit profile is used as supplied; it is not averaged
+again. For multi-level factors or interactions, a change in one design
 column may not represent a valid change in the original variable. Use
 compatible covariate profiles and update all related design columns when
 constructing such comparisons. Derivatives of a raw variable that also
@@ -332,19 +356,30 @@ matrix, and grouping information. Observation-level margins plots have
 no individual SEs: the SEs in `ame` describe its average effects. Lines
 through effects at chosen profiles and plots of individual effects also
 answer different questions; choose the display to match the question.
+Automatic profile curves use the weighted means for the other covariates
+and a grid spanning the positive-weight observations. Fitted shares,
+residuals, individual effects, and plotted points remain observation-level
+values; the package does not multiply them by their observation weights.
 
 ### Standard errors for partial effects
 
 With `se = TRUE`, the package uses the simulation-based **Krinsky–Robb
 method**. It draws the entire non-baseline coefficient vector from an
-estimated joint normal distribution using `vcov(fit)`, recomputes the
-requested effects for each draw, and uses their sample standard deviation
-as the SE. Keeping the coefficients together preserves their covariance
-across outcomes and covariates.
+estimated joint normal distribution using `vcov(fit)` and recomputes the
+requested effects for each draw using the same fixed observation weights.
+The ordinary sample standard deviation across these equally likely draws
+is the SE. Observation weights apply within each effect calculation;
+they are not weights for the simulation draws.
+
+Keeping the coefficients together preserves their covariance across
+outcomes and covariates. `ame$cov.list` stores a `J`-by-`J` covariance
+matrix of the outcome effects for each selected covariate, and
+`ame$weights` retains the observation weights used for averaging.
 
 These SEs describe coefficient uncertainty while holding the observed
-covariates, or the chosen reference profile, fixed. They rely on an
-asymptotic normal approximation. Set a seed for reproducibility and
+covariates and weights, or the chosen reference profile, fixed. They do
+not describe the spread of individual effects across the sample. They
+rely on an asymptotic normal approximation. Set a seed for reproducibility and
 increase `R` if Monte Carlo variation is material for the application.
 
 The reported z statistics divide each effect estimate by its simulated
@@ -377,13 +412,16 @@ curve <- plot(
 Values are used in outcome-column order. The aggregate estimates describe
 changes in the supplied value scale, and `wtp.obs` contains the
 observation-level changes when requested from average-across margins.
+Observation weights have already entered the average effects; the supplied
+category values are a separate aggregation across outcomes.
 
-**Aggregate inference needs care.** The current `wtp()` SE calculation,
-and optional WTP plot bars, use an independence approximation that omits
-covariance between outcome effects. They are not full joint SEs for the
-aggregate. Valid joint aggregate inference would need that covariance or
-joint effect draws. This limitation is separate from the joint
-Krinsky–Robb calculation used by `effects.fmlogit()`.
+When effect SEs are available, `wtp()` uses the joint outcome covariance
+from the same Krinsky–Robb draws: for values $v$ and effect covariance
+$C_k$, the aggregate variance is $v'C_kv$. Optional plot bars use the same
+calculation. This retains the covariance required by the adding-up
+constraint. If all categories have the same value, reallocating shares
+changes neither the total value nor its estimated uncertainty, apart
+from numerical rounding.
 
 ## Practical concerns
 
@@ -402,11 +440,13 @@ Consider rescaling covariates when their numerical scales differ greatly,
 and investigate redundant columns or poorly identified outcomes when
 optimisation or covariance estimation fails.
 
-**Separate fitting weights from effect averaging.** The optional
-`weights` argument supplies relative observation weights for estimation.
-The current package uses arithmetic covariate means and unweighted
-averages of individual effects, even after a weighted fit. These are not
-automatically population-weighted average effects.
+**Keep the weighting target consistent.** The optional `weights` argument
+supplies relative observation weights that are retained after fitting and
+inherited by average effects, default mean profiles, and profile plots.
+Multiplying all weights by a common positive constant changes none of
+these summaries. Appropriate survey weights can make the represented
+distribution differ from the raw sample; arbitrary weights do not by
+themselves establish a population interpretation.
 
 **Assess the mean specification and the sampling assumptions.** Robust
 SEs do not repair a poorly specified conditional mean. Logit imposes a

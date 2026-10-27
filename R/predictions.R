@@ -28,6 +28,10 @@
 #' \code{newbeta} is removed so that its first row is zero before prediction.
 #' Fitted values and residuals cover only the observations retained during
 #' estimation; \code{object$rowNo} identifies their original row positions.
+#' Observation weights affect the fitted coefficients, but individual fitted
+#' shares, predictions and residuals are not multiplied by those weights.
+#' A population mean prediction requires a separate weighted average over the
+#' relevant covariate distribution.
 #'
 #' @return A data frame with one column per outcome and one row per observation.
 #'   \code{fitted()} returns the stored fitted shares, \code{residuals()} returns

@@ -49,3 +49,21 @@ wald_table <- function(est, se) {
   cbind(Estimate = est, `Std. Error` = se, `z value` = z,
         `Pr(>|z|)` = 2 * stats::pnorm(abs(z), lower.tail = FALSE))
 }
+
+# Post-estimation inherits the retained observation weights from the fit.
+fit_weights <- function(object) {
+  N <- nrow(object$x)
+  weights <- object$weights
+  if (is.null(weights)) weights <- rep(1, N)
+  if (!is.numeric(weights) || length(weights) != N ||
+      any(!is.finite(weights)) || any(weights < 0) || !any(weights > 0)) {
+    stop("'object$weights' must be finite, nonnegative and aligned with 'object$x', with at least one positive weight.")
+  }
+  weights
+}
+
+# Each column estimates a mean over the distribution represented by the weights.
+weighted_colMeans <- function(x, weights) {
+  weights <- weights / max(weights)  # Keep the normalising sum finite.
+  colSums(x * (weights / sum(weights)))
+}

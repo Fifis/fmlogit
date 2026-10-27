@@ -36,8 +36,8 @@
 #'
 #' SEs appear only when available in the input object. Coefficient SEs use the
 #' full joint HC0 covariance; partial-effect SEs use Krinsky-Robb simulation.
-#' Aggregate SEs retain the independence approximation documented in
-#' \code{wtp()}. The stored z statistics and two-sided normal p-values determine
+#' Aggregate SEs use the joint covariance of outcome effects from those draws.
+#' The stored z statistics and two-sided normal p-values determine
 #' the significance symbols. Fitted-model descriptions report the maximised
 #' quasi-log-likelihood, not a fully specified probability likelihood.
 #'
@@ -168,7 +168,7 @@ summary.fmlogit.wtp <- function(object, varlist = NULL, sepline = FALSE,
                                 digits = 3, sigcode = c(0.05, 0.01, 0.001),
                                 print = FALSE, ...) {
   if (!inherits(object, "fmlogit.wtp")) stop("Expect an fmlogit.wtp object. Wrong object type given.")
-  has_se <- identical(colnames(object$wtp), c("estimate", "std", "z", "p-value"))
+  has_se <- identical(colnames(object$wtp), c("Estimate", "Std. Error", "z value", "Pr(>|z|)"))
   xnames <- if (has_se) rownames(object$wtp) else colnames(object$wtp)
   if (length(varlist) == 0) varlist <- xnames
   var_colNo <- match(varlist, xnames)
