@@ -325,8 +325,11 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
   # H uses w_i once; scores already include w_i, so their products use w_i^2.
   # Using optim.weights gives the same covariance: the common scale cancels.
   bread <- -hessian(theta.hat)
-  if (any(!is.finite(bread)) || rcond(bread) < 1e-12) {
+  if (any(!is.finite(bread))) {
     stop("The joint weighted Hessian is singular or poorly conditioned; robust covariance estimation is unavailable.")
+  }
+  if (rcond(bread) < 1e-12) {
+    warning("The joint weighted Hessian is poorly conditioned; robust covariance estimation is very unreliable. Try reducing the number of regressors, e.g., through summation or category merging.")
   }
   bread.inv <- solve(bread)
   scores <- scoreObs(theta.hat)
