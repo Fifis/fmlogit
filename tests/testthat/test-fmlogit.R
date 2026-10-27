@@ -1,31 +1,31 @@
-simulatedShares <- function(n = 500L, phi = 10, m = 10L, seed = 1L) {
+simulated_shares <- function(N = 500L, concentration = 10, trials = 10L, seed = 1L) {
   set.seed(seed)
-  X <- cbind(1, matrix(rnorm(n * 4L), ncol = 4L))
-  colnames(X) <- c("(Intercept)", paste0("X", 1:4))
-  B <- rbind(
+  x <- cbind(1, matrix(rnorm(N * 4L), ncol = 4L))
+  colnames(x) <- c("(Intercept)", paste0("x", 1:4))
+  beta <- rbind(
     rep(0, 5L),
     c(1, 1, 1, 1, 1),
     c(1, -1, 1, -1, 1)
   )
-  eta <- X %*% t(B)
-  e <- exp(sweep(eta, 1L, apply(eta, 1L, max), FUN = "-"))
-  P <- e / rowSums(e)
-  gammas <- matrix(rgamma(n * 3L, shape = phi * as.vector(P)), nrow = n)
-  Y_dirichlet <- gammas / rowSums(gammas)
-  Y_multinom <- t(vapply(seq_len(n), function(i) {
-    as.vector(rmultinom(1L, size = m, prob = P[i, ])) / m
+  eta <- tcrossprod(x, beta)
+  numerator <- exp(sweep(eta, 1L, apply(eta, 1L, max), FUN = "-"))
+  p <- numerator / rowSums(numerator)
+  gamma_draws <- matrix(rgamma(N * 3L, shape = concentration * as.vector(p)), nrow = N)
+  y_dirichlet <- gamma_draws / rowSums(gamma_draws)
+  y_multinomial <- t(vapply(seq_len(N), function(i) {
+    as.vector(rmultinom(1L, size = trials, prob = p[i, ])) / trials
   }, numeric(3L)))
-  colnames(Y_dirichlet) <- colnames(Y_multinom) <- paste0("share", 1:3)
-  list(x = X, beta = B, p = P, y1 = Y_dirichlet, y2 = Y_multinom)
+  colnames(y_dirichlet) <- colnames(y_multinomial) <- paste0("share", 1:3)
+  list(x = x, beta = beta, p = p, y_dirichlet = y_dirichlet, y_multinomial = y_multinomial)
 }
 
 test_that("Starting coefficients match the processed design", {
-  s <- simulatedShares(n = 300L)
-  b0 <- initEst(s$y2, s$x)
-  expect_length(b0, 2L * ncol(s$x))
-  expect_true(all(is.finite(b0)))
+  s <- simulated_shares(N = 300L)
+  theta_init <- initEst(s$y_multinomial, s$x)
+  expect_length(theta_init, 2L * ncol(s$x))
+  expect_true(all(is.finite(theta_init)))
   
-  fit <- fmlogit(s$y2, s$x, beta0 = b0, method = "BHHH")
+  fit <- fmlogit(s$y_multinomial, s$x, beta0 = theta_init, method = "BHHH")
   expect_equal(colnames(fit$x), colnames(s$x))
   expect_true(all(fit$coefficient[1L, ] == 0))
   expect_equal(dim(fit$coefficient), c(3L, 5L))
@@ -37,78 +37,86 @@ test_that("Starting coefficients match the processed design", {
   expect_true(all(is.finite(fit$raw.estimates)))
 })
 
-test_that("Both multi-nomial and Dirichlet DGPs are admitted", {
-  s <- simulatedShares(n = 300L)
-  for (Y in list(s$y1, s$y2)) {
-    fit <- fmlogit(Y, s$x, method = "BFGS")
+test_that("Intercept-only starting values reproduce the mean-share ratio", {
+  y <- cbind(base = c(0.2, 0.3, 0.4), other = c(0.8, 0.7, 0.6))
+  theta_init <- initEst(y, matrix(1, nrow(y), 1L))
+  expect_equal(unname(theta_init), qlogis(mean(y[, "other"])))
+  expect_identical(names(theta_init), "other:(Intercept)")
+})
+
+test_that("Both multinomial and Dirichlet DGPs are admitted", {
+  s <- simulated_shares(N = 300L)
+  for (y in list(s$y_dirichlet, s$y_multinomial)) {
+    fit <- fmlogit(y, s$x, method = "BFGS")
     expect_true(all(is.finite(fit$coefficient)))
-    expect_equal(rowSums(fit$fitted.values), rep(1, nrow(Y)), tolerance = 1e-12)
-    expect_equal(length(fit$vcov), ncol(Y))
-    expect_equal(names(fit$estimates), colnames(Y)[-1L])
+    expect_equal(rowSums(fit$fitted.values), rep(1, nrow(y)), tolerance = 1e-12)
+    expect_equal(length(fit$vcov), ncol(y))
+    expect_equal(names(fit$estimates), colnames(y)[-1L])
   }
 })
 
-test_that("Rescaling probability weights leaves HC0 inference unchanged", {
-  s <- simulatedShares(n = 300L)
+test_that("Rescaling relative observation weights leaves HC0 inference unchanged", {
+  s <- simulated_shares(N = 300L)
   set.seed(123)
-  w <- runif(nrow(s$y1), 0.5, 2)  # Importance weights
-  fit1 <- fmlogit(s$y1, s$x, weights = w)
-  fit2 <- fmlogit(s$y1, s$x, weights = 10 * w, beta0 = fit1$raw.estimates)
+  weights <- runif(nrow(s$y_dirichlet), 0.5, 2)  # Relative observation weights
+  fit1 <- fmlogit(s$y_dirichlet, s$x, weights = weights)
+  fit2 <- fmlogit(s$y_dirichlet, s$x, weights = 10 * weights, beta0 = fit1$raw.estimates)
   expect_equal(fit1$raw.estimates, fit2$raw.estimates, tolerance = 1e-3)
   expect_equal(fit1$vcov_full, fit2$vcov_full, tolerance = 1e-3)
 })
 
 test_that("Missing rows and weights stay aligned", {
-  s <- simulatedShares(n = 300L)
-  Y <- s$y2
-  X <- s$x
-  Y[3L, 2L] <- NA_real_
-  X[5L, 2L] <- NA_real_
-  w <- seq_len(nrow(Y)) / nrow(Y)
-  fit <- fmlogit(Y, X, weights = w)
-  expect_equal(fit$rowNo, setdiff(seq_len(nrow(Y)), c(3L, 5L)))
-  expect_equal(fit$weights, w[fit$rowNo])
+  s <- simulated_shares(N = 300L)
+  y <- s$y_multinomial
+  x <- s$x
+  y[3L, 2L] <- NA_real_
+  x[5L, 2L] <- NA_real_
+  weights <- seq_len(nrow(y)) / nrow(y)
+  fit <- fmlogit(y, x, weights = weights)
+  expect_equal(fit$rowNo, setdiff(seq_len(nrow(y)), c(3L, 5L)))
+  expect_equal(fit$weights, weights[fit$rowNo])
 })
 
 test_that("Rank-deficient designs and invalid shares are rejected", {
-  s <- simulatedShares(n = 300L)
-  X_bad <- cbind(s$x, duplicate = s$x[, 2L])
-  expect_error(fmlogit(s$y2, X_bad), "rank-deficient")
-  Y_bad <- s$y2
-  Y_bad[1L, 1L] <- 2
-  expect_error(fmlogit(Y_bad, s$x), "shares")
+  s <- simulated_shares(N = 300L)
+  x_bad <- cbind(s$x, duplicate = s$x[, 2L])
+  expect_error(fmlogit(s$y_multinomial, x_bad), "rank-deficient")
+  y_bad <- s$y_multinomial
+  y_bad[1L, 1L] <- 2
+  expect_error(fmlogit(y_bad, s$x), "shares")
 })
 
 test_that("The joint HC0 covariance matches a numerical Hessian", {
-  s <- simulatedShares(n = 300L)
-  fit <- fmlogit(s$y1, s$x, method = "BHHH")
-  X <- fit$x
-  Y <- fit$y
-  w <- fit$weights
-  J <- ncol(Y)
-  K <- ncol(X)
-  P <- fit$fitted.values
+  s <- simulated_shares(N = 300L)
+  fit <- fmlogit(s$y_dirichlet, s$x, method = "BHHH")
+  x <- fit$x
+  y <- fit$y
+  weights <- fit$weights
+  J <- ncol(y)
+  K <- ncol(x)
+  p <- fit$fitted.values
   
-  scores <- do.call(cbind, lapply(2:J, function(j) {
-    X * (w * (Y[, j] - rowSums(Y) * P[, j]))
+  scores <- do.call(cbind, lapply(seq.int(2L, J), function(j) {
+    x * (weights * (y[, j] - rowSums(y) * p[, j]))
   }))
   
+  # An independent objective checks the analytic joint covariance.
   loglik <- function(theta) {
-    B <- rbind(rep(0, K), matrix(theta, J - 1L, K, byrow = TRUE))
-    eta <- tcrossprod(X, B)
+    beta <- rbind(rep(0, K), matrix(theta, J - 1L, K, byrow = TRUE))
+    eta <- tcrossprod(x, beta)
     shift <- apply(eta, 1L, max)
     log_denom <- shift + log(rowSums(exp(sweep(eta, 1L, shift, FUN = "-"))))
-    sum(w * (rowSums(Y * eta) - rowSums(Y) * log_denom))
+    sum(weights * (rowSums(y * eta) - rowSums(y) * log_denom))
   }
-  H_num <- -stats::optimHess(fit$raw.estimates, fn = loglik)
-  H_inv <- solve(H_num)
-  V_num <- H_inv %*% crossprod(scores) %*% H_inv
-  expect_equal(unname(fit$vcov_full), unname(V_num), tolerance = 1e-4)
+  bread_num <- -stats::optimHess(fit$raw.estimates, fn = loglik)
+  bread_inv <- solve(bread_num)
+  vcov_num <- bread_inv %*% crossprod(scores) %*% bread_inv
+  expect_equal(unname(fit$vcov_full), unname(vcov_num), tolerance = 1e-4)
 })
 
 test_that("Fitted shares and response residuals are consistent", {
-  s <- simulatedShares(n = 300L)
-  fit <- fmlogit(s$y1, s$x, print.level = 0L)
+  s <- simulated_shares(N = 300L)
+  fit <- fmlogit(s$y_dirichlet, s$x, print.level = 0L)
   p <- as.matrix(fitted(fit))
   expect_equal(p, fit$fitted.values)
   expect_equal(as.matrix(predict(fit)), p)
@@ -118,8 +126,8 @@ test_that("Fitted shares and response residuals are consistent", {
 })
 
 test_that("Predictions recover known multinomial shares and honor new coefficients", {
-  s <- simulatedShares(n = 300L)
-  fit <- fmlogit(s$y2, s$x, print.level = 0L)
+  s <- simulated_shares(N = 300L)
+  fit <- fmlogit(s$y_multinomial, s$x, print.level = 0L)
   newdata <- s$x[1:3, -1L, drop = FALSE]
   p <- predict(fit, newdata = newdata, newbeta = s$beta)
   expect_equal(unname(as.matrix(p)), unname(s$p[1:3, ]), tolerance = 1e-12)

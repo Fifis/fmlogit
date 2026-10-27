@@ -32,8 +32,8 @@ test_that("WTP plots agree with individual effects and inference at grid points"
   N <- 80L
   x <- cbind(income = seq(-2, 2, length.out = N),
              indicator = rep(c(0, 1), N / 2L))
-  p <- stats::plogis(0.2 + 0.5 * x[, "income"] - 0.3 * x[, "indicator"])
-  share <- stats::rbinom(N, 20L, p) / 20
+  p_other <- stats::plogis(0.2 + 0.5 * x[, "income"] - 0.3 * x[, "indicator"])
+  share <- stats::rbinom(N, 20L, p_other) / 20
   y <- cbind(base = 1 - share, other = share)
   object <- fmlogit(y, x, method = "BFGS", print.level = 0L)
   varlist <- c("indicator", "income")
