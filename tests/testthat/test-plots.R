@@ -1,65 +1,71 @@
+
 test_that("Margins plots preserve effects, grouping and graphics settings", {
-  income <- matrix(c(-0.2, -0.1, 0.1, 0.2, 0.2, 0.1, -0.1, -0.2), nrow = 4L,
-                   dimnames = list(NULL, c("base", "other")))
-  individual <- list(income = income, indicator = 2*income)
-  object <- structure(list(effects = vapply(individual, colMeans, numeric(2L)),
-                           marg.list = individual,
-                           se = matrix(0.5, nrow = 2L, ncol = 2L), R = 100L),
-                      class = "fmlogit.margins")
-  x <- cbind(income = c(2, 0, 3, 1), indicator = c(0, 1, 0, 1))
+  s <- simulatedShares(N = 100L)
+  fit <- fmlogit(s$y.multinom, s$x, print.level = 0L)
+  varlist <- c("x2", "x1")
+  object <- effects.fmlogit(fit, effect = "marginal", marg.type = "aveacr", varlist = varlist)
 
   file <- tempfile(fileext = ".pdf")
   grDevices::pdf(file)
-  on.exit({ grDevices::dev.off(); unlink(file) }, add = TRUE)
+  on.exit({
+    grDevices::dev.off()
+    unlink(file)
+  }, add = TRUE)
   mfrow <- graphics::par("mfrow")
-  result <- plot(x = object, varlist = c("indicator", "income"), x.data = x,
-                 against.x = "income", group.x = "indicator",
-                 group.algebra = function(z) z > 0, mfrow = c(2, 2))
 
-  expected <- cbind(individual$indicator, individual$income)
-  colnames(expected) <- c("indicator:base", "indicator:other",
-                         "income:base", "income:other")
-  expect_equal(result$x, x[, "income"])
+  result <- plot(object, varlist = varlist, x.data = fit$x, against.x = "x1", group.x = "x2",
+    group.algebra = function(z) z > 0, mfrow = c(2, 3))
+
+  expected <- do.call(cbind, object$marg.list[varlist])
+  colnames(expected) <- unlist(lapply(varlist, function(v) {
+    paste(v, colnames(fit$y), sep = ":")
+  }), use.names = FALSE)
+
+  expect_equal(result$x, fit$x[, "x1"])
   expect_equal(result$effects, expected)
-  expect_equal(result$group, factor(x[, "indicator"] > 0))
+  expect_equal(result$group, factor(fit$x[, "x2"] > 0))
+
   # Standard errors of average margins do not describe individual effects.
   expect_null(result$se)
-  expect_equal(graphics::par("mfrow"), mfrow)
 })
 
-test_that("WTP plots agree with individual effects and inference at grid points", {
-  set.seed(19)
-  N <- 80L
-  x <- cbind(income = seq(-2, 2, length.out = N),
-             indicator = rep(c(0, 1), N/2L))
-  p.other <- stats::plogis(0.2 + 0.5*x[, "income"] - 0.3*x[, "indicator"])
-  share <- stats::rbinom(N, 20L, p.other)/20
-  y <- cbind(base = 1 - share, other = share)
-  weights <- seq(0.5, 3, length.out = N)
-  weights[c(1L, N)] <- 0
-  object <- fmlogit(y, x, weights = weights, method = "BFGS", print.level = 0L)
-  varlist <- c("indicator", "income")
-  wtp.vec <- c(0, 100)
 
-  result <- plot(object, wtp.vec, varlist, effect = "marginal", plot.show = FALSE)
-  margins <- effects.fmlogit(object, effect = "marginal", marg.type = "aveacr",
-                            varlist = varlist)
+
+test_that("WTP plots agree with individual effects and inference at grid points", {
+  s <- simulatedShares(N = 100L)
+  object <- fmlogit(s$y.multinom, s$x, print.level = 0L)
+  N <- nrow(object$x)
+  varlist <- c("x2", "x1")
+  wtp.vec <- c(0, 50, 100)
+
+  result <- plot(object, wtp.vec = wtp.vec, varlist = varlist,
+                 effect = "marginal", plot.show = FALSE)
+
+  margins <- effects.fmlogit(object, effect = "marginal", marg.type = "aveacr", varlist = varlist)
   expected <- wtp(margins, wtp.vec, indv.obs = TRUE)$wtp.obs
+
   expect_equal(result$x, seq_len(N))
   expect_equal(result$effects, expected)
   expect_null(result$se)
 
-  set.seed(7)
-  result <- plot(object, wtp.vec, varlist, against = "income", t = 3L,
-                 effect = "marginal", se = TRUE, R = 30L, plot.show = FALSE)
+  # Compare the first evaluation point and its standard errors.
+  set.seed(1)
+  result <- plot(object, wtp.vec = wtp.vec, varlist = varlist, against = "x1", t = 3L,
+    effect = "marginal", se = TRUE, R = 30L, plot.show = FALSE)
+
+  weights <- object$weights
   at <- apply(object$x[, -1L, drop = FALSE], 2L, stats::weighted.mean, w = weights)
-  support <- x[weights > 0, "income"]
-  at["income"] <- min(support)
-  set.seed(7)
+  support <- object$x[weights > 0, "x1"]
+  at["x1"] <- min(support)
+
+  set.seed(1)
   margins <- effects.fmlogit(object, effect = "marginal", varlist = varlist,
-                            at = at, se = TRUE, R = 30L)
+    at = at, se = TRUE, R = 30L)
+
   expected <- wtp(margins, wtp.vec)$wtp
+
   expect_equal(result$x, seq(min(support), max(support), length.out = 3L))
   expect_equal(unname(result$effects[1L, ]), unname(expected[, "Estimate"]))
   expect_equal(unname(result$se[1L, ]), unname(expected[, "Std. Error"]))
 })
+

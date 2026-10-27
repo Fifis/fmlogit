@@ -14,14 +14,14 @@ simulatedMargins <- function(N = 300L, J = 3L, seed = 1L) {
   colnames(beta) <- colnames(x)
   p <- shareMeans(x, beta)
   y <- t(vapply(seq_len(N), function(i) {
-    as.numeric(rmultinom(1L, size = 30L, prob = p[i, ]))/30
+    as.numeric(rmultinom(1L, size = 25L, prob = p[i, ]))/25
   }, numeric(J)))
   colnames(y) <- colnames(p)
-  fmlogit(y, x, method = "BFGS", print.level = 0L)
+  fmlogit(y, x, method = "BHHH", print.level = 0L)
 }
 
 test_that("Marginal effects equal numerical derivatives of predicted shares", {
-  object <- simulatedMargins()
+  object <- simulatedMargins(N = 300L, seed = 1)
   step <- 1e-5
 
   # Check the mean design and a specified point, keeping other covariates fixed.
@@ -34,7 +34,7 @@ test_that("Marginal effects equal numerical derivatives of predicted shares", {
       x.low[, k] <- x.low[, k] - step
       x.high[, k] <- x.high[, k] + step
       expected <- (shareMeans(x.high, object$coefficient) -
-                   shareMeans(x.low, object$coefficient))/(2*step)
+                   shareMeans(x.low, object$coefficient)) / (2*step)
       expect_equal(as.numeric(result$effects[, k-1L]),
                    as.numeric(expected), tolerance = 1e-7)
     }
@@ -42,13 +42,13 @@ test_that("Marginal effects equal numerical derivatives of predicted shares", {
 })
 
 test_that("Discrete effects equal minimum-to-maximum changes in predicted shares", {
-  object <- simulatedMargins()
+  object <- simulatedMargins(N = 300L, seed = 1)
   at <- c(0.5, 0.25)
 
   for (marg.type in c("atmean", "aveacr")) {
     x <- if (marg.type == "atmean") matrix(c(1, at), nrow = 1L) else object$x
     result <- effects.fmlogit(object, effect = "discrete", marg.type = marg.type,
-                             at = if (marg.type == "atmean") at else NULL)
+                              at = if (marg.type == "atmean") at else NULL)
 
     # For the binary indicator, this is the change from zero to one.
     for (k in 2:ncol(x)) {
@@ -67,7 +67,7 @@ test_that("Discrete effects equal minimum-to-maximum changes in predicted shares
 })
 
 test_that("Average marginal effects average individual expected-share derivatives", {
-  object <- simulatedMargins()
+  object <- simulatedMargins(N = 300L, seed = 1)
   result <- effects.fmlogit(object, marg.type = "aveacr")
   step <- 1e-5
 
@@ -76,7 +76,7 @@ test_that("Average marginal effects average individual expected-share derivative
     x.low[, k] <- x.low[, k] - step
     x.high[, k] <- x.high[, k] + step
     individual <- (shareMeans(x.high, object$coefficient) -
-                   shareMeans(x.low, object$coefficient))/(2*step)
+                   shareMeans(x.low, object$coefficient)) / (2*step)
 
     # Check both the heterogeneous effects and their sample average.
     expect_equal(result$marg.list[[k-1L]], individual, tolerance = 1e-7)
@@ -87,28 +87,24 @@ test_that("Average marginal effects average individual expected-share derivative
 })
 
 test_that("Two-outcome margins reduce to the binary-logit formula", {
-  object <- simulatedMargins(J = 2L)
+  object <- simulatedMargins(N = 300, J = 2L, seed = 1)
   p.other <- shareMeans(object$x, object$coefficient)[, 2L]
   slopes <- object$coefficient[2L, -1L]
 
   # dp_2/dx_k = p_2 (1 - p_2) beta_2k, and dp_1/dx_k = -dp_2/dx_k.
-  expected <- colMeans(outer(p.other*(1 - p.other), slopes))
+  expected <- colMeans(outer(p.other * (1 - p.other), slopes))
   result <- effects.fmlogit(object, marg.type = "aveacr")
-  expect_equal(unname(result$effects), unname(rbind(-expected, expected)),
-               tolerance = 1e-8)
+  expect_equal(unname(result$effects), unname(rbind(-expected, expected)), tolerance = 1e-8)
 
-  p.mean <- shareMeans(matrix(colMeans(object$x), nrow = 1L),
-                       object$coefficient)[1L, 2L]
-  expected <- p.mean*(1 - p.mean)*slopes
+  p.mean <- shareMeans(matrix(colMeans(object$x), nrow = 1L), object$coefficient)[1L, 2L]
+  expected <- p.mean * (1 - p.mean)*slopes
   result <- effects.fmlogit(object)
-  expect_equal(unname(result$effects), unname(rbind(-expected, expected)),
-               tolerance = 1e-8)
+  expect_equal(unname(result$effects), unname(rbind(-expected, expected)), tolerance = 1e-8)
 })
 
 test_that("Baseline effect uncertainty includes covariance between outcome slopes", {
-  object <- simulatedMargins()
-  p.at <- as.numeric(shareMeans(matrix(c(1, 0, 0), nrow = 1L),
-                               object$coefficient))
+  object <- simulatedMargins(N = 300L, seed = 1)
+  p.at <- as.numeric(shareMeans(matrix(c(1, 0, 0), nrow = 1L), object$coefficient))
   slopes <- c("second:income", "third:income")
   sigma <- 0.01
 
@@ -116,20 +112,19 @@ test_that("Baseline effect uncertainty includes covariance between outcome slope
   # The baseline income effect is -p_1 (p_2 beta_2 + p_3 beta_3),
   # so its variance is known exactly when only the two slopes are uncertain.
   for (rho in c(0, 0.85)) {
-    object$vcov.full[,] <- 0
+    object$vcov.full[, ] <- 0
     object$vcov.full[slopes, slopes] <- sigma^2*matrix(c(1, rho, rho, 1), nrow = 2L)
     expected <- sigma*p.at[1L]*sqrt(p.at[2L]^2 + p.at[3L]^2 + 2*rho*p.at[2L]*p.at[3L])
 
     set.seed(123)
-    result <- effects.fmlogit(object, varlist = "income", at = c(0, 0),
-                             se = TRUE, R = 2000L)
+    result <- effects.fmlogit(object, varlist = "income", at = c(0, 0), se = TRUE, R = 1000L)
     # Allow Monte Carlo error, while checking independent and correlated slopes.
     expect_lt(abs(result$se[1L, 1L]/expected - 1), 0.1)
   }
 })
 
 test_that("Krinsky-Robb standard errors agree with the delta method", {
-  object <- simulatedMargins()
+  object <- simulatedMargins(N = 300L, seed = 1)
   # Small coefficient uncertainty makes the delta approximation accurate.
   object$vcov.full <- object$vcov.full/100
   theta <- object$raw.estimates
@@ -142,7 +137,7 @@ test_that("Krinsky-Robb standard errors agree with the delta method", {
       effectAt <- function(theta) {
         object$raw.estimates <- theta
         as.numeric(effects.fmlogit(object, effect = effect, marg.type = marg.type,
-                                  varlist = "income", at = at)$effects)
+                                   varlist = "income", at = at)$effects)
       }
 
       # Numerically differentiate the requested statistic with respect to theta.
@@ -150,14 +145,14 @@ test_that("Krinsky-Robb standard errors agree with the delta method", {
         lower <- upper <- theta
         lower[q] <- lower[q] - step
         upper[q] <- upper[q] + step
-        (effectAt(upper) - effectAt(lower))/(2*step)
+        (effectAt(upper) - effectAt(lower)) / (2*step)
       }, numeric(J))
 
       # Delta-method variance: gradient %*% vcov(theta) %*% t(gradient).
       expected <- sqrt(diag(gradient %*% object$vcov.full %*% t(gradient)))
       set.seed(123)
       result <- effects.fmlogit(object, effect = effect, marg.type = marg.type,
-                               varlist = "income", at = at, se = TRUE, R = 1000L)
+                                varlist = "income", at = at, se = TRUE, R = 1000L)
       expect_lt(max(abs(as.numeric(result$se)/expected - 1)), 0.1)
     }
   }

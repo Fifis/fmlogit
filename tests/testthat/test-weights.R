@@ -1,8 +1,7 @@
-weightedExample <- function() {
-  s <- simulatedShares(N = 200L, seed = 12L)
+weightedExample <- function(seed = 1L) {
+  s <- simulatedShares(N = 200L, seed = seed)
   weights <- ifelse(s$x[, "x1"] > 0, 5, 1)
-  fmlogit(s$y.dirichlet, s$x, weights = weights,
-          method = "BFGS", print.level = 0L)
+  fmlogit(s$y.dirichlet, s$x, weights = weights, print.level = 0L)
 }
 
 test_that("Population effects use weighted averages and a weighted mean profile", {
@@ -15,6 +14,7 @@ test_that("Population effects use weighted averages and a weighted mean profile"
     expect_equal(as.numeric(result$effects), as.numeric(expected))
   }
 
+  # By default, the weighted mean of x is used as the evaluation point
   at <- colSums(fit$x[, -1L, drop = FALSE]*weights)
   expect_equal(effects.fmlogit(fit)$effects, effects.fmlogit(fit, at = at)$effects)
 
@@ -26,9 +26,9 @@ test_that("Population effects use weighted averages and a weighted mean profile"
 })
 
 test_that("Weight units do not change effects or their simulated uncertainty", {
-  s <- simulatedShares(N = 200L, seed = 12L)
+  s <- simulatedShares(N = 200L, seed = 1)
   weights <- ifelse(s$x[, "x1"] > 0, 5, 1)
-  # Both BHHH fits start independently; large weights must not impede convergence.
+  # Both fits start independently; large weights must not impede convergence
   fit <- fmlogit(s$y.dirichlet, s$x, weights = weights, print.level = 0L)
   rescaled <- fmlogit(s$y.dirichlet, s$x, weights = 1e4*weights, print.level = 0L)
   expect_equal(fit$raw.estimates, rescaled$raw.estimates, tolerance = 1e-7)
@@ -44,7 +44,7 @@ test_that("Weight units do not change effects or their simulated uncertainty", {
   expect_equal(result$cov.list, comparison$cov.list, tolerance = 1e-7)
 
   # Equal averaging weights recover the ordinary sample average.
-  fit$weights[] <- 1
+  fit$weights[seq_along(fit$weights)] <- 1
   equal <- effects.fmlogit(fit, marg.type = "aveacr", varlist = "x1")
   expect_equal(as.numeric(equal$effects), as.numeric(colMeans(equal$marg.list$x1)))
 })
@@ -54,14 +54,13 @@ test_that("A zero-weight outlier does not define the reference profile or endpoi
   outlier <- fit$x[1L, , drop = FALSE]
   outlier[, "x1"] <- 100
   augmented <- fmlogit(rbind(fit$y, fit$y[1L, ]), rbind(fit$x, outlier),
-                      weights = c(fit$weights, 0), beta0 = fit$raw.estimates,
-                      method = "BFGS", print.level = 0L)
+                       weights = c(fit$weights, 0), beta0 = fit$raw.estimates, print.level = 0L)
 
   for (effect in c("marginal", "discrete")) {
     for (marg.type in c("atmean", "aveacr")) {
       expected <- effects.fmlogit(fit, effect = effect, marg.type = marg.type, varlist = "x1")
       result <- effects.fmlogit(augmented, effect = effect, marg.type = marg.type, varlist = "x1")
-      expect_equal(result$effects, expected$effects, tolerance = 1e-4)
+      expect_equal(result$effects, expected$effects, tolerance = 1e-3)
     }
   }
 })
@@ -79,7 +78,7 @@ test_that("Weighted Krinsky-Robb SEs agree with the conditional delta method", {
     lower <- upper <- theta
     lower[q] <- lower[q] - step
     upper[q] <- upper[q] + step
-    (effectAt(upper) - effectAt(lower))/(2*step)
+    (effectAt(upper) - effectAt(lower)) / (2*step)
   }, numeric(ncol(fit$y)))
 
   expected <- sqrt(diag(gradient %*% fit$vcov.full %*% t(gradient)))

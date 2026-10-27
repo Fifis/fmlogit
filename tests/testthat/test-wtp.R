@@ -9,7 +9,7 @@ test_that("Aggregate uncertainty retains outcome covariance and adding-up identi
                             R = 100L), class = "fmlogit.margins")
   values <- c(0, 10, 20)
   result <- wtp(margins, values)$wtp
-  expect_equal(unname(result[, "Estimate"]), 0.5)
+  expect_equal(unname(result[, "Estimate"]), sum(values * effects))
   expected.se <- sqrt(10^2*0.04 + 20^2*0.09 + 2*10*20*0.03)
   expect_equal(unname(result[, "Std. Error"]), expected.se)
   expect_equal(wtp(margins, values + 100)$wtp, result)
@@ -23,8 +23,7 @@ test_that("Binary aggregate SEs agree with the single independent share effect",
   x <- data.frame(income = seq(-1, 1, length.out = 80L))
   share <- rbinom(nrow(x), 20L, plogis(0.2 + 0.5*x$income))/20
   fit <- fmlogit(cbind(base = 1 - share, other = share), x, print.level = 0L)
-  margins <- effects(fit, varlist = "income", marg.type = "aveacr",
-                    se = TRUE, R = 50L)
+  margins <- effects(fit, varlist = "income", marg.type = "aveacr", se = TRUE, R = 50L)
   result <- wtp(margins, c(5, 25))$wtp
 
   # With two shares, a = (v_2 - v_1) m_2, so its SE scales by |v_2 - v_1|.
