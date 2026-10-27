@@ -11,12 +11,15 @@ Description: Estimation and simple inference for the fractional multinomial
              and
              Mullahy (2015) <doi:10.1515/jem-2012-0006>.
 Depends:
-    R (>= 3.0.0), maxLik
-Imports: maxLik, Rdpack, graphics
-Suggests: 
-    Foreign,
-    testthat (>= 3.0.0)
+    R (>= 3.3.0), maxLik
+Imports: Rdpack, graphics, stats
+RdMacros: Rdpack
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
 Encoding: UTF-8
 License: EUPL
-RoxygenNote: 7.3.3
 Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0

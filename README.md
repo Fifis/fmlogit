@@ -36,6 +36,23 @@ category is the reference, or baseline; its coefficients are set to zero
 to identify the model. Its fitted share and partial effects are still
 estimated and can be substantial.
 
+The same notation is used throughout the package:
+
+| Name | Meaning |
+| --- | --- |
+| `N`, `J`, `K` | Numbers of retained observations, outcomes, and design columns, including the intercept. |
+| `y` | `N`-by-`J` matrix of observed shares; the baseline outcome is first. |
+| `x` | `N`-by-`K` design matrix; the first column is the intercept. |
+| `beta` | `J`-by-`K` coefficient matrix; the first row is zero. |
+| `theta` | The `d = (J - 1) * K` free coefficients, stacked by outcome, with the intercept first in each block. |
+| `eta` | `N`-by-`J` matrix of linear indices, with entries `x_i' beta_j`. |
+| `p` | `N`-by-`J` matrix of conditional mean shares. |
+
+Mullahy writes the mean share as ξ and uses the last outcome as the
+baseline. Here `p` denotes that same mean, and `eta` names the linear
+index. Changing the baseline changes the coefficient representation,
+while fitted shares and partial effects remain the same.
+
 Observed shares may be exactly zero or one. They can be used directly,
 without replacing zeros by small positive numbers or taking logarithms of
 the observed shares. For finite coefficients, fitted conditional means are
@@ -67,8 +84,8 @@ also accepts shares without an underlying count denominator.
 
 ```r
 set.seed(123)
-n <- 300
-x <- data.frame(income = rnorm(n), urban = rbinom(n, 1, 0.4))
+N <- 300
+x <- data.frame(income = rnorm(N), urban = rbinom(N, 1, 0.4))
 
 eta <- cbind(
   home = 0,
@@ -78,7 +95,7 @@ eta <- cbind(
 p <- exp(eta)
 p <- p / rowSums(p)
 
-y <- t(vapply(seq_len(n), function(i) {
+y <- t(vapply(seq_len(N), function(i) {
   as.numeric(rmultinom(1, size = 20, prob = p[i, ])) / 20
 }, numeric(3)))
 colnames(y) <- colnames(p)
