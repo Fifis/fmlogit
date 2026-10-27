@@ -1,115 +1,262 @@
 ---
-title: 'The fmlogit Package: An Econometric Document'
-author: "Xinde James Ji"
-date: "Oct.10, 2016"
-output: pdf_document
+title: 'Fractional multinomial logit: model and interpretation'
+subtitle: 'An econometric guide to the fmlogit package'
+author:
+  - 'James Xinde Ji'
+  - 'Andreï Victorovitch Kostyrka'
+date: '27 October 2026'
+lang: en
+abstract: >
+  This vignette explains the conditional-mean share model, estimation,
+  robust inference, and partial effects implemented in fmlogit. It connects
+  the package's notation and calculations to the econometric literature.
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{Fractional multinomial logit: model and interpretation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
-This document provides theoretical documentations for the "fmlogit" package in R. Updates will be published at my github site: \url{https://github.com/f1kidd/fmlogit}. Any suggestions or concerns are welcomed\footnote{email: xji@vt.edu}. For function usage and calls, please check directly with help(func_name) after loading the fmlogit package. 
+**Package version:** `r read.dcf("../DESCRIPTION", fields = "Version")[1L]`.
+**Source:** [Fifis/fmlogit](https://github.com/Fifis/fmlogit).
+**Maintainer:** [Andreï V. Kostyrka](mailto:andrei.kostyrka@gmail.com).
+See the function help pages for the interface and worked examples.
 
 # Motivation
-Fractional multinomial responses, or multivariate share models, arises naturally in various occasions.  For example, a municipality allocates its budgets to multiple departments, and we are interested in the proportion of the budgets that each department receives. Or, there are multiple candidates in a presendential election, and we are interested in the percentage of support for each candidate in each state. 
 
-The model is distinct in that 1) each of the response lies between 0 and 1, and 2) the share of all responses adds up to one. The fmlogit model utilizes the two distinct factors, and model it explicitly using a multinomial logit transformation on the response variables. If the true data generating process is multinomial fractions, or shares of multiple choices, then the fractional multinomial logit model is consistent and efficient, while other candidate models such as Dirichlet or Beta regression is not. 
+Shares describe how a total is divided across categories. Examples include
+household spending across goods, portfolios across assets, and daily time
+across activities. Each share lies between zero and one, and the shares
+for an observation add up to one. Ye and Pendyala (2005), for example,
+model the allocation of available time to home activities, travel, and
+other activities. Defining the available total is part of defining the
+outcome.
 
-# Econometric Model
-The basis of this package is Papke and Wooldridge(1996)'s paper, in which they proposed a quasi-maximum likelihood(QMLE) estimator for fractional response variables. As their approach applies to binary response variables, here we expand it to a multinomial response variables with fractional structure. 
+Fractional multinomial logit models the conditional mean of each share.
+It respects both the bounds and the common total, while allowing observed
+shares to be exactly zero or one. It does not require transforming the
+observed shares or specifying their entire conditional distribution.
+Consistency still requires a correctly specified conditional mean and
+appropriate identification and sampling conditions.
 
-We start by writing:\footnote{The demonstration below is in individual specific notation, but matrix notation is not hard to obtain from the individual specific notations. The actual function uses matrix calculation, which increases algorithm speed.}
-$$E(y_{ij}|x_i) = G(x_i\beta_j)$$
-for the $j^{th}$ choice of the $i^{th}$ obsevation , where G(.) is a know function satisfying 0<G(z)<1 for all $z\in {\rm I\!R}$. Note that here we only allow for common covariates of $x_i$, and not for choice-specific attributes. Following the logit convention, G(.) is chosen to be the multinomial logit function, with the form:
-$$G(z_j) = \frac{exp(z_j)}{\sum_{k=1}^J exp(z_k)}$$
-And the multinomial likelihood function, is thus given by
-$$ ln(L_i) = \sum_{j=1}^J y_{ij} ln(G(x_i\beta_j))$$
-with $\beta_1=0$, the baseline coefficient equal to zero. 
-Papke and Wooldridge(1996) showed that the QMLE estimator of $\beta$, obtained by the the maximazation problem
-$$ argmax_\beta \sum_{i=1}^N ln(L_i)$$
-is a consistent estimator for $\beta$ if G(z) is the correct functional form for E(y|x). 
+# Econometric model
 
-To estimate the standard error for the QMLE estimator, define $g(z_j)\equiv \partial G(z_j)/\partial z_j$, the partial derivative of the multinomial logit function with respect to choice j. Specifically, $g(z_j)$ has the following functional form:
-$$ g(z_j) = \frac{\hat{E}\hat{S} - \hat{E}^2}{\hat{S}^2} $$
-where $\hat{E} = exp(x_i\beta_j)$, and $\hat{S} = \sum_{k=1}^J exp(x_i\beta_k)$. 
+## Notation and normalization
 
-A robust asymptotic standard error for $\hat{\beta_j}$ is given by the square root of the diagonal element of the following matrix:
-$$\hat{A_j}^{-1}\hat{B_j}\hat{A_j}^{-1}$$
-where
-$$\hat{A} = \sum_{i=1}^N \frac{\hat{g}_{ij}^2 \mathbf{x}_i'\mathbf{x}_i}{\hat{G}_{ij}(1-\hat{G}_{ij})} $$
-$$\hat{B} = \sum_{i=1}^N \frac{\hat{u}_{ij}^2 \hat{g}_{ij}^2 \mathbf{x}_i'\mathbf{x}_i} {[\hat{G}_{ij}(1-\hat{G}_{ij})]^2} $$
-in which $\hat{u}_{ij}$ is the residual for the $j^{th}$ choice of the $i^{th}$ observation, given by $\hat{u}_{ij}=y_{ij} - G(x_i\beta_{j})$. Specifically, $\hat{A}$ is the information matrix, which is not a consistent estimator itself, and $\hat{B}$ is a weight correction for A. 
+The package uses the same layout throughout estimation and post-estimation:
 
-In most binary / multinomial response models, the convention is to treat one of the choices as a baseline. Here we apply the same logic, and treat j=1 as the baseline scenario. This implicitly generates a restriction that $\beta_1=0$, and all other betas are the marginal difference to the baseline case.  
+| Object | Meaning |
+| --- | --- |
+| `y` | An `N`-by-`J` matrix of observed shares. |
+| `x` | An `N`-by-`K` processed design matrix, with the intercept first. |
+| `beta` | A `J`-by-`K` coefficient matrix, with the baseline row first and zero. |
+| `theta` | The `d = (J - 1) * K` free coefficients, stacked by non-baseline outcome. |
+| `eta` | The `N`-by-`J` matrix of linear indices. |
+| `p` | The `N`-by-`J` matrix of conditional mean shares. |
 
-# Partial Effects
+The indices are `i` for observations, `j` and `h` for outcomes, and `k`
+for design columns. Write $x_i$ as a column vector whose first element is
+one, and $\beta_j$ as the coefficient vector for outcome $j$. Define
+the linear index $\eta_{ij} = x_i'\beta_j$. The mean function is
+\[
+p_{ij} = E(y_{ij}\mid x_i)
+= \frac{\exp(\eta_{ij})}{\sum_{h=1}^{J}\exp(\eta_{ih})},
+\qquad \beta_1 = 0.
+\]
 
-Interpreting partial effects for limited dependent variables can be tricky, and this is especially true for multinomial logit models. The coefficients obtained in the regression model represents the logit-transformed odds ratio for that specific choice against the baseline choice, and should not be treated as the marginal or discrete effect obtained from the model. Instead, the modeller has to derive "partial effects" from the coefficient estimates, which is analogous to the coefficients in a regular linear model. The rest of the section provides detail information for deriving two types of partial effects: marginal effects and discrete effects. 
+Here $p_{ij}$ denotes the conditional mean called $\xi_k(x;\beta)$ in
+Mullahy (2015); his outcome index $k$ becomes $j$ here. The observed
+share $y_{ij}$ corresponds to his share variable $s$.
+The symbol $\xi$ denotes his conditional mean, not the linear index.
+His number of outcomes is $M$, called `J` in the package. He normalizes
+the last outcome's coefficients to zero; the package uses the first.
+These normalizations give equivalent fitted means and partial effects.
 
-## Marginal Effects
+The first outcome's mean is estimated even though its coefficients are
+zero. With finite coefficients, all fitted means lie strictly between
+zero and one and sum to one. The model accepts observed zeros and ones
+without separately modelling their probabilities. It allows dependence
+among shares; their common total already links them.
 
-Marginal effect is the counterpart of the coefficients of a continous variable in a linear model. It measures the effect of a marginal change of a continuous variable $x_k$ on the choice variable $y_j$. It should be point out that the right hand size variable, $x_k$, will have J marginal effects, each on one choice variable $y_j$.
+## Quasi-maximum likelihood estimation
 
-The marginal effect of the multinomial models actually has a very distinctive form: 
- 
-$$ME_{jk} = \frac{\partial p_j}{x_k} = p_j(\beta_{kj} - \bar{\beta}_i)$$
- 
-where $p_j$ is an 1*N vector of predicted probabilities for choice j, and $\bar{\beta}_i = \sum_{m=1}^J \beta_{km} p_m$ is the probability weighted average of $\beta{km}$. This shows that the marginal effects among different individuals are actually different given different predicted probabilities of choice j. 
- 
-Typically, two types of summary measures are used to illustrate the global average marginal effects. The first one is called marginal effects at the mean (MEM) in the code. In algebric form, this is represented as
- 
-$$MEM_{jk} = \bar{p}_j(\beta_{kj} - \bar{\beta}_i)$$
- 
-where $\bar{p}_j$ is the predicted value of choice j at the mean of all X covariates. Centering observations around the mean simplifies the calculation, however it ignores the potential heterogeneity in marginal effects, especially at the extreme values. 
- 
-Another measure is called average marginal effects (AME). This can be written as:
- 
-$$AME_{jk} = \frac{1}{N}\sum_{i=1}^N p_j(\beta_{kj} - \bar{\beta}_i)$$
- 
-However, according to Greene(2003), there is no agreement as to which one is prefered. A more inclusive approach will be to plot the marginal effect of interest across all individuals. This is not provided in the function, but can certainly be implemented in a straightforward way in R. 
- 
-## Discrete Effects 
- 
-Discrete effect is a little bit different from marginal effects. Instead of calculating the slope of the 
-coefficients, discrete effect considers the impact of a discrete change in one covariates on the predicted outcome variables. This is especially useful for dummy variables, where calculating marginal effects does not make much sense. 
+Following the fractional-response approach of Papke and Wooldridge (1996)
+and its multivariate development in Mullahy (2015), estimation maximizes
+\[
+Q(\theta) = \sum_{i=1}^{N} q_i(\theta),
+\qquad q_i(\theta) = w_i\sum_{j=1}^{J}y_{ij}\log p_{ij}(\theta).
+\]
 
-The discrete effect has a straight-forward form. Consider a discrete change of a dummy variable k from 0 to 1. This is just
-$$DE_{jk} = Pr(y=j|\mathbf{x}_{x_k=1}) - Pr(y=j|\mathbf{x}_{x_k=0})$$
-The change in predicted value by setting $x_k=1$ and $x_k=0$. 
+The optional nonnegative weights $w_i$ default to one. This is a
+multinomial quasi-log-likelihood: fractional shares replace the outcome
+indicators used for a single categorical choice. It is not a claim that
+the observed shares follow a categorical or multinomial distribution.
 
-Similar to the marginal effect case, we can calculate discrete effects at the mean (DEM) by predicting the outcome when all other covariates at the mean, or average discrete effects, which averages the predicted difference across all observations. 
+The intercept is the first design column. `fmlogit()` adds it automatically,
+removes supplied constant columns, and converts factor inputs to design
+columns. Share-weighted pairwise fractional logits against the first
+outcome supply starting values. The estimator then optimizes the full
+joint objective using `maxLik`.
 
-## Standard Errors
+## Robust standard errors
 
-Here we adopt the Krinsky-Robb method to compute standard errors for marginal and discrete effects. As oppose to the delta method commonly used in other programs such as Stata, Krinsky-Robb is a simulation-based method. The idea of Krinsky-Robb is that, to calculate the variance of a function $Var(f(\mathbf{\beta}))$, we do the following step:
+Define the full weighted observation score
+$g_i = \partial q_i(\theta)/\partial\theta$ and the negative Hessian
+$H = -\sum_i\partial^2q_i(\theta)/\partial\theta\partial\theta'$.
+The package estimates the joint HC0 covariance as
+\[
+\widehat{\mathrm{Var}}(\hat\theta)
+= \hat H^{-1}\left(\sum_i\hat g_i\hat g_i'\right)\hat H^{-1}.
+\]
 
-For i in 1:N, where N is a very large number, 
+Both the Hessian and the scores include all non-baseline outcomes.
+The covariance therefore retains dependence between coefficients from
+different outcome equations. `vcov(fit)` returns this full matrix;
+`fit$vcov` contains only its individual outcome blocks and a zero baseline
+block.
 
-1) Sample from the known distribution of $\mathbf{\beta}$
+Ordinary multinomial-logit inverse-Hessian standard errors generally do
+not describe the variability of fractional shares. Robust standard errors
+can be smaller than those nominal standard errors. The sandwich estimator
+allows the conditional variance to differ from the nominal multinomial
+variance; it does not repair an incorrect mean function. The implementation
+treats observations as independent. Weights alone do not account for
+survey clusters, repeated observations, strata, or serial dependence.
 
-2) For each of the sample, calculate $f(\mathbf{\beta})$
+# Partial effects
 
-3) Take the empirical variance of $f(\mathbf{\beta})$. 
+For a non-intercept covariate entering linearly, $\beta_{jk}$ gives the
+change per unit in the log ratio $\log(p_{ij}/p_{i1})$. The intercept gives
+this log ratio when the other design columns are zero. It is not a percentage-point
+change in the expected share. A positive coefficient need not imply a
+positive marginal effect because every outcome enters the common
+denominator. Coefficient tests concern relative-share parameters;
+hypotheses about share changes require inference for those changes.
+Wulff's guide to multinomial logit interpretation explains this distinction.
 
-And after sufficiently large sample size, the empirical variance converges to the theoretical variance. 
+## Marginal and discrete effects
 
-## Hypothesis Testing of Marginal and Discrete Effects
-One of the major advantages of Krinsky-Robb over numerical Delta method is in hypothesis testing of those effects. The marginal and discrete effect are not normally distributed since the effect contains a multinomial logit distributed $p_ij$. So even though sample size is large, the central limit theorem does not really hold here. So knowing the standard error does not really help if we do not know the actual shape of the density. But that is out of the scope of the Delta method.
+For a continuous design column, the marginal effect is
+\[
+m_{ijk} = \frac{\partial p_{ij}}{\partial x_{ik}}
+= p_{ij}\left(\beta_{jk}-\sum_{h=1}^{J}p_{ih}\beta_{hk}\right).
+\]
 
-Krinsky-Robb solves this problem by providing empirical draws from the marginal effects. Hypothesis testing here will be very simple: say we test $H_0: D_j=0$. We just need to compare 0 with our N draws, and see if it falls out of the 95% mass. This is a major advantage we provide here comparing with Stata's fmlogit module. 
+The effect depends on the covariate profile and on coefficients for every
+outcome. An effect of 0.02 means a local increase of two percentage points
+per unit of the covariate. A finite change need not equal this slope times
+the size of the change.
 
-# Practical Concerns
-## Optimization Method
-This function calls *maxLik()* in package *maxLik* to maximize the quasi-likelihood function. The *maxLik* function is a wrapper which provides several different maximization methods, including most *optim()* methods in the base package, as well as other useful methods such as BHHH(Berndt-Hall-Hall-Hausman). The choice of optimization method can create vastly different parameter estimates. Here it is recommended that either conjugate gradients(CG), or Berndt-Hall-Hall-Hausman(BHHH) to ensure convergence. In limited testing scenarios, BHHH typically has the best performace in terms of convergence for large datasets, while CG is faster in computation speed for smaller, easy to converge datasets.
+A discrete effect instead compares fitted shares with the selected design
+column set to its observed maximum and minimum, keeping the other columns
+fixed. For a zero-or-one variable, this compares one with zero. Both
+derivatives and discrete changes sum to zero across outcomes: a gain in
+one share must be offset elsewhere.
 
-## Robust Standard Error
-It is worth noting that the robust standard error created in this function is consistently lower than that created in Stata's fmlogit package, typically by about 20\%. However, the robust SE here is a consistent estimator following Pakpe and Wooldridge(1996)'s $\hat{A_j}^{-1}\hat{B_j}\hat{A_j}^{-1}$ estimator, so it is recommended that the number should be used with causion. 
+Effects refer to processed design columns. Changing a factor indicator
+does not update the other indicators. Likewise, derivatives of a raw
+variable that also enters through powers or interactions need the
+appropriate chain rule. Construct meaningful covariate profiles when
+making such comparisons.
+
+## Effects at the mean and average effects
+
+`marg.type = "atmean"`, the default, evaluates effects at arithmetic mean
+design values, or at a profile supplied through `at`. Discrete effects
+still replace the selected column by its observed endpoints.
+`marg.type = "aveacr"` instead computes effects for each retained
+observation and takes their arithmetic average. The two summaries
+generally differ in a nonlinear model. Mean binary indicators may also
+describe a profile that no individual has.
+
+These means and averages are unweighted even when estimation weights
+were supplied. The latter affect the fitted coefficients and their
+covariance, rather than the averaging rule for partial effects.
+Observation-level effects are retained in `marg.list`, allowing their
+variation to be plotted with base R graphics.
+
+## Standard errors and hypothesis tests
+
+With `se = TRUE`, `effects.fmlogit()` uses the simulation-based
+Krinsky--Robb method. For each simulation index $r = 1,\ldots,R$, it draws
+\[
+\theta^{(r)} \sim
+N\!\left(\hat\theta,\widehat{\mathrm{Var}}(\hat\theta)\right),
+\]
+recomputes the requested effect, and uses the sample standard deviation
+of these effects as its standard error. Drawing the entire coefficient
+vector together preserves covariance across outcomes and covariates.
+The first outcome's coefficients remain zero in every draw.
+
+This relies on an estimated asymptotic normal distribution, not a known
+finite-sample distribution. It holds the observed design or chosen
+profile fixed. A population-average effect may require accounting for
+uncertainty in the covariate distribution as well.
+
+Reported z statistics divide the point estimate by its simulated standard
+error; two-sided p-values use the standard normal approximation. Wald
+intervals, such as the estimate plus or minus 1.96 standard errors,
+use this same approximation. The package does not report simulation
+percentile intervals. The delta method also supports standard errors,
+intervals, and hypothesis tests; Krinsky--Robb is an alternative
+approximation. Mullahy additionally illustrates bootstrap inference.
+Use `set.seed()` for reproducibility and increase `R` when simulation
+variation matters.
+
+## User-valued aggregates
+
+`wtp()` multiplies outcome effects by fixed user-supplied values and adds
+them. Values may represent costs or returns; the function does not
+estimate willingness to pay from preferences. The units of an aggregate
+effect depend on these supplied values.
+
+Its current standard errors use an independence approximation, omitting
+covariance between outcome effects. This approximation does not provide
+the full joint uncertainty of an aggregate. Optional bars in fitted-model
+plots use the same approximation. The joint coefficient draws used by
+`effects.fmlogit()` do not remove this separate limitation.
+
+# Practical concerns
+
+Supply mutually exclusive and exhaustive shares on a zero-to-one scale.
+A share based on a zero total is undefined. Rows with missing responses
+or covariates are removed together; `fit$rowNo` records their original
+positions, and estimation weights follow the same rows.
+
+Check convergence information and investigate poorly scaled covariates,
+redundant design columns, or weakly identified outcomes when estimation
+fails. Optimizer choice can affect convergence and numerical accuracy;
+it should not define a different estimand. Compare fitted shares and
+effects over meaningful profiles with support in the data.
+
+Robust inference does not establish a causal interpretation. A suitable
+research design and identifying assumptions are needed for that purpose.
+Ordinary likelihood-ratio inference should not be applied automatically
+to a quasi-likelihood. Alternative links, two-part participation models,
+and the specification tests reviewed by Ramalho, Ramalho, and Murteira
+(2011) are not implemented here.
 
 # References
-Papke, L. E. and Wooldridge, J. M. (1996), Econometric methods for fractional response variables with an application to 401(k) plan participation rates. J. Appl. Econ., 11: 619-632.
 
-Wulff, Jesper N. "Interpreting Results From the Multinomial Logit Model Demonstrated by Foreign Market Entry." Organizational Research Methods (2014): 1094428114560024.
-
-Greene, W. H. (2003). Econometric analysis (5th ed.). Upper Saddle River, NJ.: Prentice Hall
-
-
-
-
-
+- Mullahy, J. (2015). [Multivariate fractional regression estimation of
+  econometric share models](https://doi.org/10.1515/jem-2012-0006).
+  *Journal of Econometric Methods*, 4(1), 71--100.
+- Papke, L. E., and Wooldridge, J. M. (1996). Econometric methods for
+  fractional response variables with an application to 401(k) plan
+  participation rates. *Journal of Applied Econometrics*, 11(6), 619--632.
+- Ramalho, E. A., Ramalho, J. J. S., and Murteira, J. M. R. (2011).
+  [Alternative estimating and testing empirical strategies for fractional
+  regression models](https://doi.org/10.1111/j.1467-6419.2009.00602.x).
+  *Journal of Economic Surveys*, 25(1), 19--68.
+- Wulff, J. N. (2015; first published online in 2014).
+  [Interpreting results from the multinomial logit model: Demonstrated by
+  foreign market entry](https://doi.org/10.1177/1094428114560024).
+  *Organizational Research Methods*, 18(2), 300--325.
+- Ye, X., and Pendyala, R. M. (2005). A model of daily time use allocation
+  using fractional logit methodology. In H. S. Mahmassani (Ed.),
+  *Transportation and Traffic Theory: Flow, Dynamics, and Human Interaction*,
+  507--524. Elsevier.
