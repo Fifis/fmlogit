@@ -10,7 +10,7 @@
 #'   \code{marg.type = "aveacr"}, or an \code{"fmlogit"} fit for aggregate plots.
 #' @param varlist Covariate names to plot, in the desired order. Defaults to
 #'   all available effects, excluding the intercept for a fitted model.
-#' @param x_data,y Optional design and observed-share matrices, such as
+#' @param x.data,y Optional design and observed-share matrices, such as
 #'   \code{fit$x} and \code{fit$y}, aligned with the retained observations.
 #'   Used by the margins method for named axes or groups.
 #' @param against For margins, a numeric vector of horizontal coordinates.
@@ -18,10 +18,10 @@
 #'   from its minimum to maximum among positive-weight observations, fixing
 #'   other columns at their fitted-weight means.
 #'   The default in both methods is to plot the observed effects by row number.
-#' @param against.x,against.y Column name in \code{x_data} or \code{y} to use as the
+#' @param against.x,against.y Column name in \code{x.data} or \code{y} to use as the
 #'   horizontal axis. Supply only one of the three axis arguments.
 #' @param group Optional grouping vector for the margins method.
-#' @param group.x Column name in \code{x_data} supplying groups.
+#' @param group.x Column name in \code{x.data} supplying groups.
 #' @param group.algebra Optional function applied to the grouping values,
 #'   for example \code{function(z) z > 0}.
 #' @param mfrow Optional two-element panel layout, as in \code{par(mfrow = ...)}.
@@ -66,11 +66,11 @@
 #'
 #' @examples
 #' x <- data.frame(income = seq(-1, 1, length.out = 40), urban = rep(0:1, 20))
-#' base <- 0.3 + 0.05 * x$income - 0.02 * x$urban
+#' base <- 0.3 + 0.05*x$income - 0.02*x$urban
 #' y <- cbind(base = base, other = 1 - base)
 #' fit <- fmlogit(y, x, print.level = 0)
 #' margins <- effects.fmlogit(fit, marg.type = "aveacr")
-#' plot(margins, x_data = fit$x, against.x = "income", group.x = "urban")
+#' plot(margins, x.data = fit$x, against.x = "income", group.x = "urban")
 #' curves <- plot(fit, wtp.vec = c(100, 200), varlist = "income",
 #'                against = "income", t = 20)
 #' head(curves$effects)
@@ -80,35 +80,35 @@
 #' @rdname plot.fmlogit
 #' @export plot.fmlogit.margins
 #' @exportS3Method
-plot.fmlogit.margins <- function(x, varlist = NULL, x_data = NULL, y = NULL,
-                                 against = NULL, against.x = NULL, against.y = NULL,
-                                 group.x = NULL, group.algebra = NULL, mfrow = NULL,
-                                 type = "p", plot.show = TRUE, group = NULL,
-                                 xlab = NULL, ...) {
+plot.fmlogit.margins <- function(x, varlist = NULL, x.data = NULL, y = NULL,
+                                against = NULL, against.x = NULL, against.y = NULL,
+                                group.x = NULL, group.algebra = NULL, mfrow = NULL,
+                                type = "p", plot.show = TRUE, group = NULL,
+                                xlab = NULL, ...) {
   object <- x
   if (!inherits(object, "fmlogit.margins") || is.null(object$marg.list)) {
     stop("'object' must contain margins computed with 'marg.type = \"aveacr\"'.")
   }
   N <- nrow(object$marg.list[[1L]])
   J <- nrow(object$effects)
-  x <- x_data
+  x <- x.data
   xnames <- colnames(object$effects)
   ynames <- rownames(object$effects)
   if (is.null(varlist)) varlist <- xnames
-  varlist <- plot_variables(varlist, xnames)
+  varlist <- plotVariables(varlist, xnames)
 
   if (sum(c(!is.null(against), !is.null(against.x), !is.null(against.y))) > 1L) {
     stop("Supply only one of 'against', 'against.x', and 'against.y'.")
   }
-  axis_label <- "Observation"
+  axis.label <- "Observation"
   if (!is.null(against.x)) {
-    against <- plot_column(x, against.x, N)
-    axis_label <- against.x
+    against <- plotColumn(x, against.x, N)
+    axis.label <- against.x
   } else if (!is.null(against.y)) {
-    against <- plot_column(y, against.y, N)
-    axis_label <- against.y
+    against <- plotColumn(y, against.y, N)
+    axis.label <- against.y
   } else if (!is.null(against)) {
-    axis_label <- "against"
+    axis.label <- "against"
   }
   if (is.null(against)) against <- seq_len(N)
   if (!is.numeric(against) || length(against) != N || any(!is.finite(against))) {
@@ -117,7 +117,7 @@ plot.fmlogit.margins <- function(x, varlist = NULL, x_data = NULL, y = NULL,
 
   if (!is.null(group.x)) {
     if (!is.null(group)) stop("Supply only one of 'group' and 'group.x'.")
-    group <- plot_column(x, group.x, N)
+    group <- plotColumn(x, group.x, N)
   }
   if (!is.null(group.algebra)) {
     if (!is.function(group.algebra) || is.null(group)) {
@@ -130,24 +130,25 @@ plot.fmlogit.margins <- function(x, varlist = NULL, x_data = NULL, y = NULL,
     group <- factor(group)
   }
 
-  effects_mat <- do.call(cbind, object$marg.list[varlist])
-  colnames(effects_mat) <- paste(rep(varlist, each = J), rep(ynames, times = length(varlist)), sep = ":")
-  plot_data <- list(x = against, effects = effects_mat, se = NULL, group = group)
+  effects.mat <- do.call(cbind, object$marg.list[varlist])
+  colnames(effects.mat) <- paste(rep(varlist, each = J),
+                               rep(ynames, times = length(varlist)), sep = ":")
+  plot.data <- list(x = against, effects = effects.mat, se = NULL, group = group)
   if (plot.show) {
-    if (is.null(xlab)) xlab <- axis_label
-    draw_effects(against, effects_mat, group = group, mfrow = mfrow, type = type,
-                 xlab = xlab, ...)
+    if (is.null(xlab)) xlab <- axis.label
+    drawEffects(against, effects.mat, group = group, mfrow = mfrow, type = type,
+                xlab = xlab, ...)
   }
-  invisible(plot_data)
+  invisible(plot.data)
 }
 
 #' @rdname plot.fmlogit
 #' @export plot.fmlogit
 #' @exportS3Method
 plot.fmlogit <- function(x, wtp.vec, varlist = NULL, against = NULL,
-                         mfrow = NULL, t = 500L, effect = c("discrete", "marginal"),
-                         type = "l", plot.show = TRUE, se = FALSE, R = 1000L,
-                         xlab = NULL, ...) {
+                        mfrow = NULL, t = 500L, effect = c("discrete", "marginal"),
+                        type = "l", plot.show = TRUE, se = FALSE, R = 1000L,
+                        xlab = NULL, ...) {
   object <- x
   if (!inherits(object, "fmlogit")) stop("'object' must be an fmlogit fit.")
   effect <- match.arg(effect)
@@ -157,16 +158,16 @@ plot.fmlogit <- function(x, wtp.vec, varlist = NULL, against = NULL,
   J <- ncol(y)
   K <- ncol(x)
   xnames <- colnames(x)
-  varlist <- plot_variables(varlist, xnames)
-  weights <- fit_weights(object)
+  varlist <- plotVariables(varlist, xnames)
+  weights <- fitWeights(object)
   if (!is.numeric(wtp.vec) || !is.null(dim(wtp.vec)) ||
       length(wtp.vec) != J || any(!is.finite(wtp.vec))) {
     stop("'wtp.vec' must be a finite numeric vector with one value per outcome.")
   }
   if (!is.logical(se) || length(se) != 1L || is.na(se)) stop("'se' must be TRUE or FALSE.")
 
-  x_eval <- x
-  against_values <- seq_len(N)
+  x.eval <- x
+  against.values <- seq_len(N)
   if (!is.null(against)) {
     k <- match(against, xnames)
     if (length(k) != 1L || is.na(k) || k == 1L) stop("'against' must name a non-intercept design column.")
@@ -174,40 +175,40 @@ plot.fmlogit <- function(x, wtp.vec, varlist = NULL, against = NULL,
       stop("'t' must be a positive integer.")
     }
     support <- x[weights > 0, k]
-    against_values <- seq(min(support), max(support), length.out = t)
-    x_eval <- matrix(rep(weighted_colMeans(x, weights), each = t), nrow = t, ncol = K,
+    against.values <- seq(min(support), max(support), length.out = t)
+    x.eval <- matrix(rep(weightedColMeans(x, weights), each = t), nrow = t, ncol = K,
                      dimnames = list(NULL, xnames))
-    x_eval[, k] <- against_values
+    x.eval[, k] <- against.values
   }
 
-  se_mat <- NULL
+  se.mat <- NULL
   if (is.null(against) && !se) {
     # Compute observation-level effects in a single call.
     margins <- effects.fmlogit(object, effect = effect, marg.type = "aveacr", varlist = varlist)
-    effects_mat <- wtp(margins, wtp.vec, indv.obs = TRUE)$wtp.obs
+    effects.mat <- wtp(margins, wtp.vec, indv.obs = TRUE)$wtp.obs
   } else {
-    effects_mat <- matrix(NA_real_, nrow(x_eval), length(varlist),
-                    dimnames = list(rownames(x_eval), varlist))
-    if (se) se_mat <- effects_mat
-    for (i in seq_len(nrow(x_eval))) {
+    effects.mat <- matrix(NA_real_, nrow = nrow(x.eval), ncol = length(varlist),
+                          dimnames = list(rownames(x.eval), varlist))
+    if (se) se.mat <- effects.mat
+    for (i in seq_len(nrow(x.eval))) {
       margins <- effects.fmlogit(object, effect = effect, varlist = varlist,
-                                at = x_eval[i, -1L], se = se, R = R)
+                                at = x.eval[i, -1L], se = se, R = R)
       result <- wtp(margins, wtp.vec)
-      effects_mat[i, ] <- if (se) result$wtp[, "Estimate"] else result$wtp[1L, ]
-      if (se) se_mat[i, ] <- result$wtp[, "Std. Error"]
+      effects.mat[i, ] <- if (se) result$wtp[, "Estimate"] else result$wtp[1L, ]
+      if (se) se.mat[i, ] <- result$wtp[, "Std. Error"]
     }
   }
-  plot_data <- list(x = against_values, effects = effects_mat, se = se_mat, group = NULL)
+  plot.data <- list(x = against.values, effects = effects.mat, se = se.mat, group = NULL)
   if (plot.show) {
     if (is.null(xlab)) xlab <- if (is.null(against)) "Observation" else against
-    draw_effects(against_values, effects_mat, se = se_mat, mfrow = mfrow, type = type,
-                 xlab = xlab, ...)
+    drawEffects(against.values, effects.mat, se = se.mat, mfrow = mfrow, type = type,
+                xlab = xlab, ...)
   }
-  invisible(plot_data)
+  invisible(plot.data)
 }
 
 # Shared selection and plotting keep both methods on the same data/graphics path.
-plot_variables <- function(varlist, xnames) {
+plotVariables <- function(varlist, xnames) {
   if (is.null(varlist)) varlist <- setdiff(xnames, "(Intercept)")
   if (!is.character(varlist) || !length(varlist) || anyNA(varlist) ||
       anyDuplicated(varlist) || anyNA(match(varlist, xnames))) {
@@ -216,20 +217,20 @@ plot_variables <- function(varlist, xnames) {
   varlist
 }
 
-plot_column <- function(data, column, N) {
+plotColumn <- function(data, column, N) {
   if (is.null(data) || nrow(data) != N || length(column) != 1L ||
       !column %in% colnames(data)) stop("Supply aligned data containing column '", column, "'.")
   data[, column]
 }
 
-draw_effects <- function(against, effects_mat, se = NULL, group = NULL, mfrow = NULL,
-                         type = "p", xlab = "Observation", ylab = "Effect",
-                         main = colnames(effects_mat), ylim = NULL, col = NULL,
-                         pch = 1, lty = 1, cex = 1, ...) {
-  n_panels <- ncol(effects_mat)
+drawEffects <- function(against, effects.mat, se = NULL, group = NULL, mfrow = NULL,
+                        type = "p", xlab = "Observation", ylab = "Effect",
+                        main = colnames(effects.mat), ylim = NULL, col = NULL,
+                        pch = 1, lty = 1, cex = 1, ...) {
+  n.panels <- ncol(effects.mat)
   if (is.null(mfrow)) {
-    side <- ceiling(sqrt(n_panels))
-    mfrow <- c(ceiling(n_panels / side), side)
+    side <- ceiling(sqrt(n.panels))
+    mfrow <- c(ceiling(n.panels/side), side)
   }
   if (!is.numeric(mfrow) || length(mfrow) != 2L || any(!is.finite(mfrow)) ||
       any(mfrow < 1 | mfrow != floor(mfrow))) stop("'mfrow' must contain two positive integers.")
@@ -239,34 +240,35 @@ draw_effects <- function(against, effects_mat, se = NULL, group = NULL, mfrow = 
   on.exit(graphics::par(oldpar))
   graphics::par(mfrow = mfrow)
 
-  show_legend <- !is.null(group)
+  show.legend <- !is.null(group)
   if (is.null(group)) group <- factor(rep("All", length(against)))
-  n_groups <- nlevels(group)
-  if (is.null(col)) col <- seq_len(n_groups)
-  col <- rep(col, length.out = n_groups)
-  pch <- rep(pch, length.out = n_groups)
-  lty <- rep(lty, length.out = n_groups)
-  main <- rep(main, length.out = n_panels)
+  n.groups <- nlevels(group)
+  if (is.null(col)) col <- seq_len(n.groups)
+  col <- rep(col, length.out = n.groups)
+  pch <- rep(pch, length.out = n.groups)
+  lty <- rep(lty, length.out = n.groups)
+  main <- rep(main, length.out = n.panels)
 
-  for (panel in seq_len(n_panels)) {
+  for (panel in seq_len(n.panels)) {
     limits <- if (is.null(ylim)) {
-      range(0, effects_mat[, panel], if (!is.null(se)) c(effects_mat[, panel] - se[, panel],
-                                                 effects_mat[, panel] + se[, panel]), finite = TRUE)
+      range(0, effects.mat[, panel],
+            if (!is.null(se)) c(effects.mat[, panel] - se[, panel],
+                               effects.mat[, panel] + se[, panel]), finite = TRUE)
     } else ylim
-    graphics::plot(against, effects_mat[, panel], type = "n", xlab = xlab, ylab = ylab,
+    graphics::plot(against, effects.mat[, panel], type = "n", xlab = xlab, ylab = ylab,
                    main = main[panel], ylim = limits, ...)
     graphics::abline(h = 0, col = "grey70", lty = 3)
-    for (level in seq_len(n_groups)) {
+    for (level in seq_len(n.groups)) {
       i <- which(group == levels(group)[level])
       i <- i[order(against[i])]
       if (!is.null(se)) {
-        graphics::segments(against[i], effects_mat[i, panel] - se[i, panel],
-                           against[i], effects_mat[i, panel] + se[i, panel], col = col[level])
+        graphics::segments(against[i], effects.mat[i, panel] - se[i, panel],
+                           against[i], effects.mat[i, panel] + se[i, panel], col = col[level])
       }
-      graphics::points(against[i], effects_mat[i, panel], type = type,
+      graphics::points(against[i], effects.mat[i, panel], type = type,
                        col = col[level], pch = pch[level], lty = lty[level], cex = cex)
     }
-    if (show_legend) {
+    if (show.legend) {
       graphics::legend("topright", legend = levels(group), col = col,
                        pch = if (type %in% c("l", "s", "S")) NA else pch,
                        lty = if (type == "p") 0 else lty, bty = "n")

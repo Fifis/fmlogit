@@ -89,14 +89,14 @@ x <- data.frame(income = rnorm(N), urban = rbinom(N, 1, 0.4))
 
 eta <- cbind(
   home = 0,
-  travel = 0.4 + 0.8 * x$income - 0.3 * x$urban,
-  other = -0.2 - 0.5 * x$income + 0.6 * x$urban
+  travel = 0.4 + 0.8*x$income - 0.3*x$urban,
+  other = -0.2 - 0.5*x$income + 0.6*x$urban
 )
 p <- exp(eta)
-p <- p / rowSums(p)
+p <- p/rowSums(p)
 
 y <- t(vapply(seq_len(N), function(i) {
-  as.numeric(rmultinom(1, size = 20, prob = p[i, ])) / 20
+  as.numeric(rmultinom(1, size = 20, prob = p[i, ]))/20
 }, numeric(3)))
 colnames(y) <- colnames(p)
 
@@ -186,7 +186,7 @@ coefficients.
 
 The default optimiser is `"BHHH"`. Other supported `maxLik` methods,
 such as `"BFGS"` or `"CG"`, can be selected through `method`.
-Inspect `fit$convergence` and `fit$conv_code` when assessing the result.
+Inspect `fit$convergence` and `fit$conv.code` when assessing the result.
 Runtime depends on sample size, the number of coefficients, scaling, and
 convergence; there is no general timing guarantee.
 
@@ -307,7 +307,7 @@ urban_change$effects
 With `marg.type = "atmean"`, `at` supplies a custom reference profile:
 
 ```r
-at <- colSums(fit$x[, -1, drop = FALSE] * fit$weights) / sum(fit$weights)
+at <- colSums(fit$x[, -1, drop = FALSE]*fit$weights)/sum(fit$weights)
 at["income"] <- 0
 effects.fmlogit(fit, varlist = "income", at = at)$effects
 ```
@@ -343,12 +343,12 @@ margins plot uses the observation-level matrices saved by
 `marg.type = "aveacr"`:
 
 ```r
-plot(ame, x_data = fit$x, against.x = "income", group.x = "urban")
+plot(ame, x.data = fit$x, against.x = "income", group.x = "urban")
 
-plot_data <- plot(
-  ame, x_data = fit$x, against.x = "income", plot.show = FALSE
+plot.data <- plot(
+  ame, x.data = fit$x, against.x = "income", plot.show = FALSE
 )
-head(plot_data$effects)
+head(plot.data$effects)
 ```
 
 Both plot methods return axis values, an effect matrix, an optional SE
@@ -435,7 +435,7 @@ categories matters.
 
 **Check the estimation sample and design.** Rows with missing responses
 or covariates are removed together, and supplied weights are subset using
-the same rows. `fit$rowNo` records the retained original positions.
+the same rows. `fit$row.no` records the retained original positions.
 Consider rescaling covariates when their numerical scales differ greatly,
 and investigate redundant columns or poorly identified outcomes when
 optimisation or covariance estimation fails.

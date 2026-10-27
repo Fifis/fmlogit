@@ -458,7 +458,7 @@ components.
 
 * **Supply mutually exclusive and exhaustive shares on a zero-to-one scale.**
 A share based on a zero total is undefined. Rows with missing responses
-or covariates are removed together; `fit$rowNo` records their original
+or covariates are removed together; `fit$row.no` records their original
 positions, and estimation weights follow the same rows.
 
 * **Check convergence information and investigate poorly scaled covariates**,

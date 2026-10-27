@@ -27,7 +27,7 @@
 #' The first outcome is the baseline. A common coefficient shift in
 #' \code{newbeta} is removed so that its first row is zero before prediction.
 #' Fitted values and residuals cover only the observations retained during
-#' estimation; \code{object$rowNo} identifies their original row positions.
+#' estimation; \code{object$row.no} identifies their original row positions.
 #' Observation weights affect the fitted coefficients, but individual fitted
 #' shares, predictions and residuals are not multiplied by those weights.
 #' A population mean prediction requires a separate weighted average over the
@@ -39,8 +39,8 @@
 #'
 #' @examples
 #' x <- data.frame(income = seq(-1, 1, length.out = 30))
-#' y <- cbind(base = 0.3 + 0.05 * x$income,
-#'            other = 0.7 - 0.05 * x$income)
+#' y <- cbind(base = 0.3 + 0.05*x$income,
+#'            other = 0.7 - 0.05*x$income)
 #' fit <- fmlogit(y, x, print.level = 0)
 #' fitted(fit)
 #' residuals(fit)
@@ -80,15 +80,15 @@ predict.fmlogit <- function(object, newdata = NULL, newbeta = NULL, ...) {
 
   if (is.null(newdata)) {
     x <- object$x
-    row_names <- rownames(object$y)
+    row.names <- rownames(object$y)
   } else {
     # A vector is one observation; matrices retain their observation rows.
     x <- if (is.null(dim(newdata))) matrix(newdata, nrow = 1L) else as.matrix(newdata)
-    if (!is.numeric(x) || nrow(x) < 1L || ncol(x) != K - 1L ||
+    if (!is.numeric(x) || nrow(x) < 1L || ncol(x) != K-1L ||
         any(!is.finite(x))) {
       stop("'newdata' must contain finite numeric values in K - 1 design columns, excluding the intercept.")
     }
-    row_names <- rownames(x)
+    row.names <- rownames(x)
     x <- cbind("(Intercept)" = 1, x)
   }
 
@@ -101,6 +101,6 @@ predict.fmlogit <- function(object, newdata = NULL, newbeta = NULL, ...) {
   beta <- sweep(beta, 2L, beta[1L, ], FUN = "-")
   theta <- as.vector(t(beta[-1L, , drop = FALSE]))
   p <- softmax(theta, x, J)$p
-  dimnames(p) <- list(row_names, colnames(object$y))
+  dimnames(p) <- list(row.names, colnames(object$y))
   as.data.frame(p)
 }

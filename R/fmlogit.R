@@ -70,31 +70,31 @@ initEst <- function(y, x, weights = NULL) {
     stop("'weights' must be nonnegative, finite, aligned with 'y', and not all zero.")
   }
   # Relative weights can be rescaled without changing the pairwise estimates.
-  weights <- weights / mean(weights)
+  weights <- weights/mean(weights)
   
   if (is.null(colnames(y))) colnames(y) <- paste0("share", seq_len(J))
   if (is.null(colnames(x))) {
-    colnames(x) <- c("(Intercept)", if (K > 1L) paste0("x", seq_len(K - 1L)))
+    colnames(x) <- c("(Intercept)", if (K > 1L) paste0("x", seq_len(K-1L)))
   }
 
   xnames <- colnames(x)
   ynames <- colnames(y)
-  beta <- matrix(0, J, K, dimnames = list(ynames, xnames))
+  beta <- matrix(0, nrow = J, ncol = K, dimnames = list(ynames, xnames))
 
   for (j in seq.int(2L, J)) {
-    pair_total <- y[, 1L] + y[, j]
-    prior_weights <- pair_total * weights
-    keep <- prior_weights > 0
+    pair.total <- y[, 1L] + y[, j]
+    prior.weights <- pair.total*weights
+    keep <- prior.weights > 0
     
     if (!any(keep)) {
       warning(sprintf("No positive pairwise weight for '%s'; using zeros.", ynames[j]))
       next
     }
     
-    response <- y[keep, j] / pair_total[keep]
+    response <- y[keep, j]/pair.total[keep]
     fit <- tryCatch(
       stats::glm.fit(
-        x = x[keep, , drop = FALSE], y = response, weights = prior_weights[keep],
+        x = x[keep, , drop = FALSE], y = response, weights = prior.weights[keep],
         family = stats::quasibinomial(link = "logit"), intercept = TRUE
       ),
       error = function(e) NULL
@@ -112,7 +112,7 @@ initEst <- function(y, x, weights = NULL) {
 
   theta <- as.vector(t(beta[-1L, , drop = FALSE]))
   names(theta) <- paste(rep(ynames[-1L], each = K),
-                       rep(xnames, times = J - 1L), sep = ":")
+                       rep(xnames, times = J-1L), sep = ":")
   theta
 }
 #' Estimate a fractional multinomial logit model
@@ -178,52 +178,54 @@ initEst <- function(y, x, weights = NULL) {
 #' @return An object of class "fmlogit". `raw.estimates` contains the stacked
 #'   non-baseline coefficients; `estimates` contains their robust Wald tables.
 #'   `baseline` names the first outcome, and `likelihood` is the maximised
-#'   quasi-log-likelihood. `conv_code` and `convergence` describe optimisation.
-#'   `count`, `y`, `x`, `weights`, and `rowNo` describe the retained sample.
+#'   quasi-log-likelihood. `conv.code` and `convergence` describe optimisation.
+#'   `count`, `y`, `x`, `weights`, and `row.no` describe the retained sample.
 #'   `coefficient` is J-by-K, with an all-zero first row.
-#'   `vcov_full` is the complete `K(J-1)`-by-`K(J-1)` joint HC0 covariance matrix.
-#'   `vcov` is a legacy list of J diagonal blocks of `vcov_full`, with a zero
+#'   `vcov.full` is the complete `K(J-1)`-by-`K(J-1)` joint HC0 covariance matrix.
+#'   `vcov` is a legacy list of J diagonal blocks of `vcov.full`, with a zero
 #'   block for the normalized baseline (cross-category blocks are only in
-#'   `vcov_full`). `fitted.values` holds the `N`-by-`J` fitted shares.
+#'   `vcov.full`). `fitted.values` holds the `N`-by-`J` fitted shares.
 #'
 #' @references
 #' \insertAllCited{}
 #' 
 #' @export
 fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
-                    method = "BHHH", iterlim = 2000L,
-                    reltol = 1e-8, print.level = 1L, ...) {
+                   method = "BHHH", iterlim = 2000L,
+                   reltol = 1e-8, print.level = 1L, ...) {
   y <- as.matrix(y)
   if (!is.numeric(y) || ncol(y) < 2L || nrow(y) < 1L) {
     stop("'y' must have at least two numeric share columns and one row.")
   }
   N0 <- nrow(y)
-  x_data <- as.data.frame(x, stringsAsFactors = FALSE)
-  if (nrow(x_data) != N0) {
+  x.data <- as.data.frame(x, stringsAsFactors = FALSE)
+  if (nrow(x.data) != N0) {
     stop("'x' and 'y' must have the same number of rows.")
   }
   if (is.null(colnames(y))) colnames(y) <- paste0("share", seq_len(ncol(y)))
   if (anyNA(colnames(y)) || anyDuplicated(colnames(y)) || any(!nzchar(colnames(y)))) {
     stop("'y' must have unique, nonempty column names.")
   }
-  if (ncol(x_data) && (anyNA(names(x_data)) || anyDuplicated(names(x_data)) || any(!nzchar(names(x_data))))) {
+  if (ncol(x.data) && (anyNA(names(x.data)) || anyDuplicated(names(x.data)) ||
+                       any(!nzchar(names(x.data))))) {
     stop("'x' must have unique, nonempty column names.")
   }
   
   if (is.null(weights)) weights <- rep(1, N0)
-  if (!is.numeric(weights) || length(weights) != N0 || any(!is.finite(weights)) || any(weights < 0)) {
+  if (!is.numeric(weights) || length(weights) != N0 ||
+      any(!is.finite(weights)) || any(weights < 0)) {
     stop("'weights' must be a finite, nonnegative numeric vector of length nrow(y).")
   }
   
-  keep_rows <- stats::complete.cases(y, x_data)
-  rowNo <- which(keep_rows)
-  if (!length(rowNo)) stop("No complete observations remain.")
-  y <- y[keep_rows, , drop = FALSE]
-  x_data <- x_data[keep_rows, , drop = FALSE]
-  weights <- weights[keep_rows]
+  keep.rows <- stats::complete.cases(y, x.data)
+  row.no <- which(keep.rows)
+  if (!length(row.no)) stop("No complete observations remain.")
+  y <- y[keep.rows, , drop = FALSE]
+  x.data <- x.data[keep.rows, , drop = FALSE]
+  weights <- weights[keep.rows]
   if (!any(weights > 0)) stop("All retained observation weights are zero.")
-  weight_scale <- mean(weights)
-  optim_weights <- weights / weight_scale
+  weight.scale <- mean(weights)
+  optim.weights <- weights/weight.scale
   
   if (any(!is.finite(y)) || any(y < 0 | y > 1) || any(abs(rowSums(y) - 1) > 1e-8)) {
     stop("'y' must contain finite shares in [0, 1], each row summing to one.")
@@ -231,127 +233,127 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
   
   # Construct a single design matrix for starting values and estimation.
   # The intercept is deliberately the first column.
-  if (ncol(x_data) > 0L) {
-    good_type <- vapply(x_data, function(v) {
+  if (ncol(x.data) > 0L) {
+    good.type <- vapply(x.data, function(v) {
       is.numeric(v) || is.factor(v) || is.character(v) || is.logical(v)
     }, logical(1))
-    if (!all(good_type)) {
-      stop("'x' contains unsupported column types in columns ", which(!good_type), ".")
+    if (!all(good.type)) {
+      stop("'x' contains unsupported column types in columns ", which(!good.type), ".")
     }
-    x_data <- lapply(x_data, function(v) {
+    x.data <- lapply(x.data, function(v) {
       if (is.factor(v)) droplevels(v) else v
     })
-    x_data <- as.data.frame(x_data, check.names = FALSE)
-    is_constant <- vapply(x_data, function(v) length(unique(v)) <= 1L, logical(1))
-    x_data <- x_data[, !is_constant, drop = FALSE]
+    x.data <- as.data.frame(x.data, check.names = FALSE)
+    is.constant <- vapply(x.data, function(v) length(unique(v)) <= 1L, logical(1))
+    x.data <- x.data[, !is.constant, drop = FALSE]
   }
-  x <- if (ncol(x_data) > 0L) {
-    stats::model.matrix(~ ., data = x_data)
+  x <- if (ncol(x.data) > 0L) {
+    stats::model.matrix(~ ., data = x.data)
   } else {
-    matrix(1, nrow(y), 1L, dimnames = list(NULL, "(Intercept)"))
+    matrix(1, nrow = nrow(y), ncol = 1L, dimnames = list(NULL, "(Intercept)"))
   }
   if (any(!is.finite(x))) stop("'x' contains non-finite design values.")
   if (colnames(x)[1L] != "(Intercept)" || any(x[, 1L] != 1)) {
     stop("Internal error: the design matrix must have an intercept first.")
   }
-  weighted_x <- x[weights > 0, , drop = FALSE]
-  rank_x <- qr(weighted_x)$rank
-  if (rank_x != ncol(x)) {
+  weighted.x <- x[weights > 0, , drop = FALSE]
+  rank.x <- qr(weighted.x)$rank
+  if (rank.x != ncol(x)) {
     stop("The x design matrix is rank-deficient. Remove redundant regressors before fitting.")
   }
   
   N <- nrow(y)
   J <- ncol(y)
   K <- ncol(x)
-  d <- K * (J - 1L)  # Number of free coefficients; the first outcome is fixed.
+  d <- K*(J-1L)  # Number of free coefficients; the first outcome is fixed.
   xnames <- colnames(x)
   ynames <- colnames(y)
   totals <- rowSums(y)
   nonbase <- seq.int(2L, J)
-  blocks <- lapply(nonbase, function(j) seq_len(K) + (j - 2L) * K)
+  blocks <- lapply(nonbase, function(j) seq_len(K) + (j-2L)*K)
   
   # Quasi-log-likelihood contributions: N-vector.
-  loglik_obs <- function(theta) {
+  loglikObs <- function(theta) {
     model <- softmax(theta, x, J)
-    optim_weights * (rowSums(y * model$eta) - totals * model$log_denom)
+    optim.weights*(rowSums(y*model$eta) - totals*model$log.denom)
   }
   
   # Weighted scores psi_i = w_i s_i: N x d, in optimizer parameter order.
-  score_obs <- function(theta) {
+  scoreObs <- function(theta) {
     p <- softmax(theta, x, J)$p
-    residual <- y - p * totals
-    do.call(cbind, lapply(nonbase, function(j) x * (optim_weights * residual[, j])))
+    residual <- y - p*totals
+    do.call(cbind, lapply(nonbase, function(j) x*(optim.weights*residual[, j])))
   }
   
   # Exact Hessian of the weighted objective, d x d (negative semidefinite).
   hessian <- function(theta) {
     p <- softmax(theta, x, J)$p
-    hess <- matrix(0, d, d)
+    hess <- matrix(0, nrow = d, ncol = d)
     for (j in nonbase) {
       for (h in nonbase) {
-        curvature <- optim_weights * totals * p[, j] * (as.numeric(j == h) - p[, h])
-        hess[blocks[[j - 1L]], blocks[[h - 1L]]] <- crossprod(x, x * curvature)
+        curvature <- optim.weights*totals*p[, j]*(as.numeric(j == h) - p[, h])
+        hess[blocks[[j-1L]], blocks[[h-1L]]] <- crossprod(x, x*curvature)
       }
     }
     -hess
   }
   
   if (is.null(beta0)) {
-    theta_init <- rep(0, d)
-    theta_pairwise <- initEst(y = y, x = x, weights = weights)
-    if (sum(loglik_obs(theta_pairwise)) > sum(loglik_obs(theta_init))) theta_init <- theta_pairwise
+    theta.init <- rep(0, d)
+    theta.pairwise <- initEst(y = y, x = x, weights = weights)
+    if (sum(loglikObs(theta.pairwise)) > sum(loglikObs(theta.init))) theta.init <- theta.pairwise
   } else {
     if (!is.numeric(beta0) || length(beta0) != d || any(!is.finite(beta0))) {
       stop("'beta0' must contain (J - 1) * K finite numeric coefficients in outcome-major order.")
     }
-    theta_init <- beta0
+    theta.init <- beta0
   }
   
-  param_names <- paste(rep(ynames[nonbase], each = K),
-                       rep(xnames, times = J - 1L), sep = ":")
-  names(theta_init) <- param_names
+  param.names <- paste(rep(ynames[nonbase], each = K),
+                       rep(xnames, times = J-1L), sep = ":")
+  names(theta.init) <- param.names
   
-  opt <- maxLik::maxLik(logLik = loglik_obs, grad = score_obs, hess = hessian,
-                        start = theta_init, method = method,
-                        control = list(iterlim = iterlim, reltol = reltol,
-                                       printLevel = print.level), ...)
-  theta_hat <- as.numeric(opt$estimate)
-  names(theta_hat) <- param_names
-  if (any(!is.finite(theta_hat))) stop("The optimiser returned non-finite coefficients.")
+  opt <- maxLik::maxLik(logLik = loglikObs, grad = scoreObs, hess = hessian,
+                       start = theta.init, method = method,
+                       control = list(iterlim = iterlim, reltol = reltol,
+                                      printLevel = print.level), ...)
+  theta.hat <- as.numeric(opt$estimate)
+  names(theta.hat) <- param.names
+  if (any(!is.finite(theta.hat))) stop("The optimiser returned non-finite coefficients.")
   if (!as.integer(opt$code) %in% c(0L, 1L, 2L, 8L)) {
     warning("The optimizer did not report ordinary convergence: ", opt$message)
   }
   
   # Joint HC0: H^{-1} sum_i(w_i^2 s_i s_i') H^{-1}.
   # H uses w_i once; scores already include w_i, so crossprod uses w_i^2.
-  # Using optim_weights gives the same covariance: the common scale cancels.
-  bread <- -hessian(theta_hat)
+  # Using optim.weights gives the same covariance: the common scale cancels.
+  bread <- -hessian(theta.hat)
   if (any(!is.finite(bread)) || rcond(bread) < 1e-12) {
     stop("The joint weighted Hessian is singular or poorly conditioned; robust covariance estimation is unavailable.")
   }
-  bread_inv <- solve(bread)
-  scores <- score_obs(theta_hat)
-  vcov_full <- bread_inv %*% crossprod(scores) %*% bread_inv
-  vcov_full <- (vcov_full + t(vcov_full)) / 2  # Remove floating-point asymmetry.
-  dimnames(vcov_full) <- list(param_names, param_names)
+  bread.inv <- solve(bread)
+  scores <- scoreObs(theta.hat)
+  vcov.full <- bread.inv %*% crossprod(scores) %*% bread.inv
+  vcov.full <- (vcov.full + t(vcov.full))/2  # Remove floating-point asymmetry.
+  dimnames(vcov.full) <- list(param.names, param.names)
   
-  model <- softmax(theta_hat, x, J)
+  model <- softmax(theta.hat, x, J)
   beta <- model$beta
   dimnames(beta) <- list(ynames, xnames)
   
   vcov <- vector("list", J)
   names(vcov) <- ynames
-  vcov[[1L]] <- matrix(0, K, K, dimnames = list(xnames, xnames))
-  se_mat <- matrix(0, J, K, dimnames = list(ynames, xnames))
+  vcov[[1L]] <- matrix(0, nrow = K, ncol = K, dimnames = list(xnames, xnames))
+  se.mat <- matrix(0, nrow = J, ncol = K, dimnames = list(ynames, xnames))
   for (j in nonbase) {
-    vcov_j <- vcov_full[blocks[[j - 1L]], blocks[[j - 1L]], drop = FALSE]
-    dimnames(vcov_j) <- list(xnames, xnames)
-    vcov[[j]] <- vcov_j
-    se_mat[j, ] <- sqrt(pmax(0, diag(vcov_j)))
+    vcov.j <- vcov.full[blocks[[j-1L]], blocks[[j-1L]], drop = FALSE]
+    dimnames(vcov.j) <- list(xnames, xnames)
+    vcov[[j]] <- vcov.j
+    se.mat[j, ] <- sqrt(pmax(0, diag(vcov.j)))
   }
   
   tabout <- lapply(nonbase, function(j) {
-    result <- wald_table(beta[j, ], se_mat[j, ])
+    result <- waldTable(beta[j, ], se.mat[j, ])
     colnames(result) <- c("Estimate", "Std. Error", "z value", "Pr(>|z|)")
     rownames(result) <- xnames
     result
@@ -362,21 +364,21 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
   dimnames(p) <- list(rownames(y), ynames)
   
   structure(list(
-    raw.estimates = theta_hat,
+    raw.estimates = theta.hat,
     estimates = tabout,
-    init.val = theta_init,
+    init.val = theta.init,
     baseline = ynames[1L],
-    likelihood = opt$maximum * weight_scale,
-    conv_code = as.integer(opt$code),
+    likelihood = opt$maximum*weight.scale,
+    conv.code = as.integer(opt$code),
     convergence = paste(opt$type, paste(opt$iterations, "iterations"), opt$message, sep = ", "),
-    count = c(Obs = N, Explanatories = K - 1L, Choices = J),
+    count = c(Obs = N, Explanatories = K-1L, Choices = J),
     y = y,
     x = x,
     weights = weights,
-    rowNo = rowNo,
+    row.no = row.no,
     coefficient = beta,
     vcov = vcov,
-    vcov_full = vcov_full,
+    vcov.full = vcov.full,
     fitted.values = p
   ), class = "fmlogit")
 }
@@ -390,5 +392,5 @@ fmlogit <- function(y, x, weights = NULL, beta0 = NULL,
 #'   coefficients and retaining cross-outcome covariance blocks.
 #' @export
 vcov.fmlogit <- function(object, ...) {
-  object$vcov_full
+  object$vcov.full
 }

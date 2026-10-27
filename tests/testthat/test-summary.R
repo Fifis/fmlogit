@@ -1,12 +1,12 @@
-summary_model <- function() {
+summaryModel <- function() {
   x <- data.frame(income = seq(-1, 1, length.out = 40), urban = rep(0:1, 20))
-  y <- cbind(base = 0.3 + 0.05 * x$income - 0.02 * x$urban)
+  y <- cbind(base = 0.3 + 0.05*x$income - 0.02*x$urban)
   y <- cbind(y, other = 1 - y[, "base"])
   fmlogit(y, x, print.level = 0L)
 }
 
 test_that("Summaries preserve baseline conventions and requested covariate order", {
-  fit <- summary_model()
+  fit <- summaryModel()
   table <- summary(fit, add.info = FALSE)$estimates
   expect_identical(rownames(table), colnames(fit$x))
   expect_identical(colnames(table), colnames(fit$y)[-1L])
@@ -25,7 +25,7 @@ test_that("Summaries preserve baseline conventions and requested covariate order
 })
 
 test_that("Rounding p-values cannot give a nonsignificant estimate a star", {
-  fit <- summary_model()
+  fit <- summaryModel()
   set.seed(123)
   margins <- effects(fit, varlist = "income", se = TRUE, R = 10L)
   aggregate <- wtp(margins, c(0, 100))

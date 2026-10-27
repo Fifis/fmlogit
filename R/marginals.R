@@ -48,7 +48,7 @@
 #' effect using the same design values and observation weights. The ordinary,
 #' unweighted sample covariance across draws estimates effect uncertainty;
 #' simulation draws do not carry survey weights. This uses
-#' \code{object$vcov_full}, including covariance between outcomes and covariates,
+#' \code{object$vcov.full}, including covariance between outcomes and covariates,
 #' and conditions on the observed design and weights. This is coefficient
 #' uncertainty, not the weighted dispersion of individual effects. It does not
 #' include uncertainty in the covariate distribution or account for survey
@@ -83,8 +83,8 @@
 #' @export effects.fmlogit
 #' @exportS3Method
 effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
-                            marg.type = "atmean", se = FALSE,
-                            varlist = NULL, at = NULL, R = 1000, ...) {
+                           marg.type = "atmean", se = FALSE,
+                           varlist = NULL, at = NULL, R = 1000, ...) {
   if (!inherits(object, "fmlogit")) stop("'object' must be an fmlogit fit.")
   effect <- match.arg(effect)
   marg.type <- match.arg(marg.type, c("atmean", "aveacr"))
@@ -97,21 +97,21 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
   }
 
   # Match fmlogit(): x is N x K with the intercept first; y is N x J.
-  # theta_hat stacks K coefficients per non-baseline outcome (j = 2, ..., J).
+  # theta.hat stacks K coefficients per non-baseline outcome (j = 2, ..., J).
   x <- object$x
   y <- object$y
   N <- nrow(y)
   J <- ncol(y)
   K <- ncol(x)
-  d <- K * (J - 1L)
-  theta_hat <- object$raw.estimates
+  d <- K*(J-1L)
+  theta.hat <- object$raw.estimates
   if (!is.matrix(x) || !is.numeric(x) || nrow(x) != N || K < 1L ||
       any(!is.finite(x)) || any(x[, 1L] != 1) ||
-      !is.numeric(theta_hat) || length(theta_hat) != d ||
-      any(!is.finite(theta_hat))) {
+      !is.numeric(theta.hat) || length(theta.hat) != d ||
+      any(!is.finite(theta.hat))) {
     stop("'object' must contain the current fmlogit design and coefficients.")
   }
-  weights <- fit_weights(object)
+  weights <- fitWeights(object)
   positive <- weights > 0
 
   xnames <- colnames(x)
@@ -121,9 +121,9 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
       anyNA(varlist) || anyDuplicated(varlist)) {
     stop("'varlist' must select distinct covariate names; use '(Intercept)' for an intercept-only model.")
   }
-  var_colNo <- match(varlist, xnames)
-  if (anyNA(var_colNo)) stop("Unrecognized covariate names in 'varlist'.")
-  n_vars <- length(var_colNo)
+  var.col.no <- match(varlist, xnames)
+  if (anyNA(var.col.no)) stop("Unrecognized covariate names in 'varlist'.")
+  n.vars <- length(var.col.no)
 
   if (!is.null(at) && marg.type != "atmean") {
     stop("'at' is only supported for 'marg.type = \"atmean\"'.")
@@ -135,96 +135,97 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
   } else {
     "at the evaluation point,"
   }
-  x_eval <- x
+  x.eval <- x
   if (marg.type == "atmean") {
-    if (is.null(at)) at <- weighted_colMeans(x[, -1L, drop = FALSE], weights)
-    if (!is.numeric(at) || !is.null(dim(at)) || length(at) != K - 1L ||
+    if (is.null(at)) at <- weightedColMeans(x[, -1L, drop = FALSE], weights)
+    if (!is.numeric(at) || !is.null(dim(at)) || length(at) != K-1L ||
         any(!is.finite(at))) {
       stop("'at' must be a finite numeric vector of length K - 1, excluding the intercept.")
     }
-    x_eval <- matrix(c(1, at), nrow = 1L, dimnames = list(NULL, xnames))
+    x.eval <- matrix(c(1, at), nrow = 1L, dimnames = list(NULL, xnames))
   }
-  eval_weights <- if (marg.type == "aveacr") weights else 1
+  eval.weights <- if (marg.type == "aveacr") weights else 1
 
   # Evaluate the same statistic for the fitted coefficients and every KR draw.
   evaluate <- function(theta, keep = FALSE) {
-    effects_mat <- matrix(NA_real_, J, n_vars, dimnames = list(ynames, varlist))
-    marg_list <- if (keep) stats::setNames(vector("list", n_vars), varlist) else NULL
+    effects.mat <- matrix(NA_real_, nrow = J, ncol = n.vars,
+                          dimnames = list(ynames, varlist))
+    marg.list <- if (keep) stats::setNames(vector("list", n.vars), varlist) else NULL
     if (effect == "marginal") {
       # p_ij = exp(x_i' beta_j) / sum_h exp(x_i' beta_h), beta_1 = 0.
       # Reuse the estimator's stable softmax rather than exponentiating directly.
-      model <- softmax(theta, x_eval, J)
+      model <- softmax(theta, x.eval, J)
       p <- model$p
       beta <- model$beta
     }
-    for (k in var_colNo) {
+    for (k in var.col.no) {
       if (effect == "marginal") {
         # dp_ij/dx_ik = p_ij (beta_jk - sum_h p_ih beta_hk).
-        beta_k <- beta[, k]
-        beta_bar <- as.vector(p %*% beta_k)
-        marg_mat <- sweep(p, 2L, beta_k, FUN = "*") - p * beta_bar
+        beta.k <- beta[, k]
+        beta.bar <- as.vector(p %*% beta.k)
+        marg.mat <- sweep(p, 2L, beta.k, FUN = "*") - p*beta.bar
       } else {
         # Use endpoints of the support with positive observation weight.
         # Delta_ijk = p_j(x_i with x_ik = max x_k) - p_j(x_i with x_ik = min x_k).
-        x_min <- x_max <- x_eval
-        x_min[, k] <- min(x[positive, k])
-        x_max[, k] <- max(x[positive, k])
-        marg_mat <- softmax(theta, x_max, J)$p - softmax(theta, x_min, J)$p
+        x.min <- x.max <- x.eval
+        x.min[, k] <- min(x[positive, k])
+        x.max[, k] <- max(x[positive, k])
+        marg.mat <- softmax(theta, x.max, J)$p - softmax(theta, x.min, J)$p
       }
-      dimnames(marg_mat) <- list(rownames(x_eval), ynames)
+      dimnames(marg.mat) <- list(rownames(x.eval), ynames)
       # AME_jk = sum_i w_i m_ijk / sum_i w_i; at a profile there is one row.
-      effects_mat[, xnames[k]] <- weighted_colMeans(marg_mat, eval_weights)
-      if (keep) marg_list[[xnames[k]]] <- marg_mat
+      effects.mat[, xnames[k]] <- weightedColMeans(marg.mat, eval.weights)
+      if (keep) marg.list[[xnames[k]]] <- marg.mat
     }
-    list(effects = effects_mat, marg.list = marg_list)
+    list(effects = effects.mat, marg.list = marg.list)
   }
 
-  result <- evaluate(theta_hat, keep = marg.type == "aveacr")
+  result <- evaluate(theta.hat, keep = marg.type == "aveacr")
   outlist <- list(effects = result$effects, weights = weights)
   if (se) {
-    vcov_full <- object$vcov_full
-    if (!is.matrix(vcov_full) || !is.numeric(vcov_full) ||
-        !identical(dim(vcov_full), c(d, d)) || any(!is.finite(vcov_full)) ||
-        !isSymmetric(vcov_full, tol = 1e-8)) {
-      stop("'object$vcov_full' must be a finite, symmetric d-by-d joint covariance matrix.")
+    vcov.full <- object$vcov.full
+    if (!is.matrix(vcov.full) || !is.numeric(vcov.full) ||
+        !identical(dim(vcov.full), c(d, d)) || any(!is.finite(vcov.full)) ||
+        !isSymmetric(vcov.full, tol = 1e-8)) {
+      stop("'object$vcov.full' must be a finite, symmetric d-by-d joint covariance matrix.")
     }
     # A symmetric eigen square root also permits singular HC0 covariance.
     # Clip only round-off negatives; materially negative eigenvalues are invalid.
-    vcov_full <- (vcov_full + t(vcov_full)) / 2
-    eigen_vcov <- eigen(vcov_full, symmetric = TRUE)
-    tol <- 1e-8 * max(abs(eigen_vcov$values))
-    if (any(eigen_vcov$values < -tol)) {
+    vcov.full <- (vcov.full + t(vcov.full))/2
+    eigen.vcov <- eigen(vcov.full, symmetric = TRUE)
+    tol <- 1e-8*max(abs(eigen.vcov$values))
+    if (any(eigen.vcov$values < -tol)) {
       stop("The joint covariance matrix must be positive semidefinite.")
     }
-    root <- sweep(eigen_vcov$vectors, 2L, sqrt(pmax(eigen_vcov$values, 0)), FUN = "*")
+    root <- sweep(eigen.vcov$vectors, 2L, sqrt(pmax(eigen.vcov$values, 0)), FUN = "*")
 
     # Simulation-based Krinsky-Robb inference:
-    # theta^(r) = theta_hat + root z^(r), z^(r) ~ N(0, I_d).
+    # theta^(r) = theta.hat + root z^(r), z^(r) ~ N(0, I_d).
     # Joint draws retain all cross-coefficient covariance and beta_1 = 0.
-    theta_draws <- sweep(matrix(stats::rnorm(R * d), nrow = R) %*% t(root),
-                         2L, theta_hat, FUN = "+")
-    marg_draws <- matrix(NA_real_, R, length(outlist$effects))
+    theta.draws <- sweep(matrix(stats::rnorm(R*d), nrow = R) %*% t(root),
+                         2L, theta.hat, FUN = "+")
+    marg.draws <- matrix(NA_real_, nrow = R, ncol = length(outlist$effects))
     for (r in seq_len(R)) {
-      marg_draws[r, ] <- evaluate(theta_draws[r, ])$effects
+      marg.draws[r, ] <- evaluate(theta.draws[r, ])$effects
     }
     # Each draw has already used the observation weights. Across IID draws,
     # use ordinary covariance (R - 1 denominator), retaining outcome covariance.
-    cov_list <- lapply(seq_len(n_vars), function(k) {
-      block <- seq_len(J) + (k - 1L) * J
-      vcov_k <- stats::cov(marg_draws[, block, drop = FALSE])
-      dimnames(vcov_k) <- list(ynames, ynames)
-      vcov_k
+    cov.list <- lapply(seq_len(n.vars), function(k) {
+      block <- seq_len(J) + (k-1L)*J
+      vcov.k <- stats::cov(marg.draws[, block, drop = FALSE])
+      dimnames(vcov.k) <- list(ynames, ynames)
+      vcov.k
     })
-    names(cov_list) <- varlist
-    se_mat <- vapply(cov_list, function(vcov_k) sqrt(pmax(0, diag(vcov_k))), numeric(J))
-    dimnames(se_mat) <- dimnames(outlist$effects)
+    names(cov.list) <- varlist
+    se.mat <- vapply(cov.list, function(vcov.k) sqrt(pmax(0, diag(vcov.k))), numeric(J))
+    dimnames(se.mat) <- dimnames(outlist$effects)
     tabout <- lapply(varlist, function(variable) {
-      wald_table(outlist$effects[, variable], se_mat[, variable])
+      waldTable(outlist$effects[, variable], se.mat[, variable])
     })
     names(tabout) <- varlist
-    outlist$se <- se_mat
+    outlist$se <- se.mat
     outlist$ztable <- tabout
-    outlist$cov.list <- cov_list
+    outlist$cov.list <- cov.list
   }
   if (marg.type == "aveacr") outlist$marg.list <- result$marg.list
   outlist$R <- if (se) R else 0

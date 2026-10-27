@@ -36,8 +36,8 @@
 #' If the input object has no standard errors, only aggregate point effects are returned.
 #' @examples
 #' x <- data.frame(income = seq(-1, 1, length.out = 30))
-#' y <- cbind(base = 0.3 + 0.05 * x$income,
-#'            other = 0.7 - 0.05 * x$income)
+#' y <- cbind(base = 0.3 + 0.05*x$income,
+#'            other = 0.7 - 0.05*x$income)
 #' fit <- fmlogit(y, x, print.level = 0)
 #' margins <- effects.fmlogit(fit, marg.type = "aveacr")
 #' wtp(margins, wtp.vec = c(0, 100), indv.obs = TRUE)
@@ -48,12 +48,12 @@ wtp <- function(object, wtp.vec, varlist = NULL, indv.obs = FALSE) {
   J <- nrow(object$effects)
   xnames <- colnames(object$effects)
   if (length(varlist) == 0L) varlist <- xnames
-  var_colNo <- match(varlist, xnames)
+  var.col.no <- match(varlist, xnames)
   if (!is.character(varlist) || !length(varlist) ||
-      anyNA(var_colNo) || anyDuplicated(varlist)) {
+      anyNA(var.col.no) || anyDuplicated(varlist)) {
     stop("'varlist' must contain distinct names from 'object$effects'.")
   }
-  n_vars <- length(var_colNo)
+  n.vars <- length(var.col.no)
   if (!is.numeric(wtp.vec) || !is.null(dim(wtp.vec)) ||
       length(wtp.vec) != J || any(!is.finite(wtp.vec))) {
     stop("'wtp.vec' must be a finite numeric vector with one value per outcome.")
@@ -63,33 +63,34 @@ wtp <- function(object, wtp.vec, varlist = NULL, indv.obs = FALSE) {
   }
   # Only value differences matter because the outcome effects sum to zero.
   values <- wtp.vec - wtp.vec[1L]
-  effects_mat <- object$effects[, var_colNo, drop = FALSE]
-  wtp_mean <- values %*% effects_mat
+  effects.mat <- object$effects[, var.col.no, drop = FALSE]
+  wtp.mean <- values %*% effects.mat
 
   if (object$R > 0) {
     if (is.null(object$cov.list)) {
       stop("Outcome-effect covariance is unavailable; recompute margins with effects.fmlogit(..., se = TRUE).")
     }
-    wtp_se <- numeric(n_vars)
-    for (k in seq_len(n_vars)) {
-      cov_mat <- object$cov.list[[varlist[k]]]
-      if (!is.matrix(cov_mat) || !is.numeric(cov_mat) ||
-          !identical(dim(cov_mat), c(J, J)) || any(!is.finite(cov_mat))) {
+    wtp.se <- numeric(n.vars)
+    for (k in seq_len(n.vars)) {
+      cov.mat <- object$cov.list[[varlist[k]]]
+      if (!is.matrix(cov.mat) || !is.numeric(cov.mat) ||
+          !identical(dim(cov.mat), c(J, J)) || any(!is.finite(cov.mat))) {
         stop("'object$cov.list' must contain a finite J-by-J covariance matrix for each selected variable.")
       }
-      wtp_se[k] <- sqrt(max(0, as.numeric(crossprod(values, cov_mat %*% values))))
+      wtp.se[k] <- sqrt(max(0, as.numeric(crossprod(values, cov.mat %*% values))))
     }
-    tabout <- wald_table(as.vector(wtp_mean), wtp_se)
+    tabout <- waldTable(as.vector(wtp.mean), wtp.se)
     rownames(tabout) <- varlist
-  } else tabout <- wtp_mean
+  } else tabout <- wtp.mean
   if (indv.obs) {
     N <- nrow(object$marg.list[[1L]])
-    wtp_mat <- matrix(NA_real_, N, n_vars, dimnames = list(NULL, varlist))
-    for (k in seq_len(n_vars)) {
-      wtp_mat[, k] <- object$marg.list[[var_colNo[k]]] %*% values
+    wtp.mat <- matrix(NA_real_, nrow = N, ncol = n.vars,
+                      dimnames = list(NULL, varlist))
+    for (k in seq_len(n.vars)) {
+      wtp.mat[, k] <- object$marg.list[[var.col.no[k]]] %*% values
     }
   }
   outlist <- list(wtp = tabout)
-  if (indv.obs) outlist$wtp.obs <- wtp_mat
+  if (indv.obs) outlist$wtp.obs <- wtp.mat
   return(structure(outlist, class = "fmlogit.wtp"))
 }
