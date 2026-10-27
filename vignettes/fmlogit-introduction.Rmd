@@ -24,28 +24,28 @@ vignette: >
 **Package version:** `r read.dcf("../DESCRIPTION", fields = "Version")[1L]`.
 **Source:** [Fifis/fmlogit](https://github.com/Fifis/fmlogit).
 **Maintainer:** [Andreï V. Kostyrka](mailto:andrei.kostyrka@gmail.com).
-See the function help pages for the interface and worked examples.
+See the function help pages for the interface and simple examples.
 
 # Motivation
 
 Shares describe how a total is divided across categories. Examples include
 household spending across goods, portfolios across assets, and daily time
 across activities. Each share lies between zero and one, and the shares
-for an observation add up to one. Ye and Pendyala (2005), for example,
+for an observation add up to one. Ye and Pendyala (2005)
 model the allocation of available time to home activities, travel, and
 other activities. Defining the available total is part of defining the
 outcome.
 
 Fractional multinomial logit models the conditional mean of each share.
-It respects both the bounds and the common total, while allowing observed
-shares to be exactly zero or one. It does not require transforming the
+It respects both the bounds and the common total, while allowing the observed
+shares to be exactly 0 or 1. It does not require transforming the
 observed shares or specifying their entire conditional distribution.
 Consistency still requires a correctly specified conditional mean and
 appropriate identification and sampling conditions.
 
 # Econometric model
 
-## Notation and normalization
+## Notation and normalisation
 
 The package uses the same layout throughout estimation and post-estimation:
 
@@ -57,60 +57,101 @@ The package uses the same layout throughout estimation and post-estimation:
 | `theta` | The `d = (J - 1) * K` free coefficients, stacked by non-baseline outcome. |
 | `eta` | The `N`-by-`J` matrix of linear indices. |
 | `p` | The `N`-by-`J` matrix of conditional mean shares. |
+| `weights` | The `N` nonnegative relative observation weights, aligned with the retained rows. |
 
 The indices are `i` for observations, `j` and `h` for outcomes, and `k`
 for design columns. Write $x_i$ as a column vector whose first element is
 one, and $\beta_j$ as the coefficient vector for outcome $j$. Define
 the linear index $\eta_{ij} = x_i'\beta_j$. The mean function is
 \[
-p_{ij} = E(y_{ij}\mid x_i)
+p_{ij} = \mathbb{E}(y_{ij}\mid x_i)
 = \frac{\exp(\eta_{ij})}{\sum_{h=1}^{J}\exp(\eta_{ih})},
-\qquad \beta_1 = 0.
+\qquad \beta_1 \equiv 0.
 \]
 
-Here $p_{ij}$ denotes the conditional mean called $\xi_k(x;\beta)$ in
-Mullahy (2015); his outcome index $k$ becomes $j$ here. The observed
+Here, $p_{ij}$ denotes the conditional mean that Mullahy (2015) calls
+$\xi_k(x;\beta)$; his outcome index $k$ becomes $j$ here. The observed
 share $y_{ij}$ corresponds to his share variable $s$.
 The symbol $\xi$ denotes his conditional mean, not the linear index.
-His number of outcomes is $M$, called `J` in the package. He normalizes
-the last outcome's coefficients to zero; the package uses the first.
-These normalizations give equivalent fitted means and partial effects.
+His number of outcomes is $M$ is called `J` in the package. He normalises
+the last outcome's coefficients to 0; the `fmlogit` package uses the first.
+These normalisations give equivalent fitted means and partial effects.
 
 The first outcome's mean is estimated even though its coefficients are
-zero. With finite coefficients, all fitted means lie strictly between
-zero and one and sum to one. The model accepts observed zeros and ones
+zero. With finite coefficients, all fitted means lie strictly in $(0, 1)$
+and sum to one. The model accepts observed zeros and ones
 without separately modelling their probabilities. It allows dependence
 among shares; their common total already links them.
 
 ## Quasi-maximum likelihood estimation
 
-Following the fractional-response approach of Papke and Wooldridge (1996)
-and its multivariate development in Mullahy (2015), estimation maximizes
+Following the fractional-response approach of Papke & Wooldridge (1996)
+and its multivariate development in Mullahy (2015), we maximise
 \[
 Q(\theta) = \sum_{i=1}^{N} q_i(\theta),
 \qquad q_i(\theta) = w_i\sum_{j=1}^{J}y_{ij}\log p_{ij}(\theta).
 \]
 
-The optional nonnegative weights $w_i$ default to one. This is a
+The optional non-negative weights $w_i$ default to one; at least one must
+be positive. They express the relative contribution of each observation.
+For example, an inverse-inclusion-probability weight can give more
+representation to population members who were less likely to be sampled.
+The target population and the assumptions behind the weights remain part
+of the empirical research design. The package does not interpret a weight
+of two as two independently observed records.
+
+This is a
 multinomial quasi-log-likelihood: fractional shares replace the outcome
-indicators used for a single categorical choice. It is not a claim that
+indicators used for a single categorical choice. It is not imply that
 the observed shares follow a categorical or multinomial distribution.
 
 The intercept is the first design column. `fmlogit()` adds it automatically,
 removes supplied constant columns, and converts factor inputs to design
 columns. Share-weighted pairwise fractional logits against the first
-outcome supply starting values. The estimator then optimizes the full
-joint objective using `maxLik`.
+outcome supply starting values. The estimator then optimises the full
+joint objective using `maxLik::maxLik()`.
 
-## Robust standard errors
+## Weighted scores, curvature, and robust standard errors
 
-Define the full weighted observation score
-$g_i = \partial q_i(\theta)/\partial\theta$ and the negative Hessian
-$H = -\sum_i\partial^2q_i(\theta)/\partial\theta\partial\theta'$.
-The package estimates the joint HC0 covariance as
+The weights must enter both estimation and inference. To see how,
+write $t_i = \sum_j y_{ij}$. A share system has $t_i = 1$; retaining
+this total in the algebra also matches the implementation's treatment
+of small rounding differences. Differentiating the log mean gives
+\[
+\frac{\partial\log p_{ih}}{\partial\beta_j}
+= x_i\{\mathbb{I}(h=j)-p_{ij}\},\qquad j>1.
+\]
+Consequently, the weighted score for outcome $j$ is
+\[
+g_{ij}
+= \frac{\partial q_i}{\partial\beta_j}
+= w_i x_i(y_{ij}-t_i p_{ij}).
+\]
+Stack these $K$-vectors in outcome order to obtain the full $d$-vector
+$g_i$. The coefficient estimate solves $\sum_i g_i(\hat\theta)=0$.
+The first outcome has no free coefficient vector and contributes through
+the common denominator.
+
+Differentiating once more gives the $K$-by-$K$ blocks of the negative
+Hessian, for $j,h>1$:
+\[
+H_{jh} = \sum_i w_i t_i p_{ij} \{\mathbb{I}(j=h)-p_{ih}\}x_i x_i'.
+\]
+The blocks with $j\ne h$ retain the curvature linking the outcome
+equations. Inverting separate equation blocks would lose those links.
+
+For independent observations, the empirical covariance of the full
+scores supplies the middle of the sandwich. If $u_i$ is the score
+before weighting, so that $g_i=w_i u_i$, this matrix is
+\[
+B = \sum_i g_i g_i' = \sum_i w_i^2 u_i u_i'.
+\]
+Thus the Hessian contains each weight once and the score outer products
+contain its square. Evaluating these matrices at the fitted coefficients
+gives the joint HC0 estimate
 \[
 \widehat{\mathrm{Var}}(\hat\theta)
-= \hat H^{-1}\left(\sum_i\hat g_i\hat g_i'\right)\hat H^{-1}.
+= \hat H^{-1}\hat B\hat H^{-1}.
 \]
 
 Both the Hessian and the scores include all non-baseline outcomes.
@@ -119,19 +160,38 @@ different outcome equations. `vcov(fit)` returns this full matrix;
 `fit$vcov` contains only its individual outcome blocks and a zero baseline
 block.
 
+This is a linearisation of the estimating equations. A small change in
+their total score changes the coefficients by approximately $H^{-1}$
+times that change; applying this transformation on both sides of the
+score covariance gives the sandwich.
+
+Multiplying every weight by a constant $c>0$ multiplies the objective,
+scores, and Hessian by $c$, and $B$ by $c^2$. The maximiser is unchanged,
+and the factors cancel in $(cH)^{-1}(c^2B)(cH)^{-1}$. Coefficients and
+their HC0 covariance therefore depend on relative weights, not their
+overall scale. Small numerical optimisation differences may still occur.
+For numerical stability, the implementation rescales optimisation
+weights to have mean one. This keeps the optimiser's step sizes unchanged
+when the same relative weights are expressed in different units.
+The fitted object retains the supplied weights
+for the retained rows, and its reported quasi-log-likelihood is restored
+to their original scale. That likelihood value scales with the weights,
+even though the coefficient estimates and HC0 covariance do not.
+
 Ordinary multinomial-logit inverse-Hessian standard errors generally do
 not describe the variability of fractional shares. Robust standard errors
 can be smaller than those nominal standard errors. The sandwich estimator
 allows the conditional variance to differ from the nominal multinomial
-variance; it does not repair an incorrect mean function. The implementation
-treats observations as independent. Weights alone do not account for
-survey clusters, repeated observations, strata, or serial dependence.
+variance, but it does not repair an incorrect mean function. The implementation
+treats observations as independent. It does not construct a complete
+survey-design variance from a vector of weights. The additional design
+information needed for that calculation is discussed below.
 
 # Partial effects
 
 For a non-intercept covariate entering linearly, $\beta_{jk}$ gives the
 change per unit in the log ratio $\log(p_{ij}/p_{i1})$. The intercept gives
-this log ratio when the other design columns are zero. It is not a percentage-point
+this log ratio when other design columns are zero. It is not a percentage-point
 change in the expected share. A positive coefficient need not imply a
 positive marginal effect because every outcome enters the common
 denominator. Coefficient tests concern relative-share parameters;
@@ -152,58 +212,124 @@ per unit of the covariate. A finite change need not equal this slope times
 the size of the change.
 
 A discrete effect instead compares fitted shares with the selected design
-column set to its observed maximum and minimum, keeping the other columns
-fixed. For a zero-or-one variable, this compares one with zero. Both
+column set to its maximum and minimum among observations with positive
+weight, keeping the other columns fixed. For a zero-or-one variable with
+both values represented at positive weight, this compares one with zero. Both
 derivatives and discrete changes sum to zero across outcomes: a gain in
 one share must be offset elsewhere.
 
 Effects refer to processed design columns. Changing a factor indicator
-does not update the other indicators. Likewise, derivatives of a raw
+does not update the other indicators. Likewise, the derivatives of a raw
 variable that also enters through powers or interactions need the
 appropriate chain rule. Construct meaningful covariate profiles when
 making such comparisons.
 
 ## Effects at the mean and average effects
 
-`marg.type = "atmean"`, the default, evaluates effects at arithmetic mean
-design values, or at a profile supplied through `at`. Discrete effects
-still replace the selected column by its observed endpoints.
-`marg.type = "aveacr"` instead computes effects for each retained
-observation and takes their arithmetic average. The two summaries
-generally differ in a nonlinear model. Mean binary indicators may also
-describe a profile that no individual has.
+Post-estimation inherits the retained observation weights from the fitted
+model. Define their sum $W=\sum_i w_i$ and normalised values
+$\alpha_i=w_i/W$. For an individual marginal or discrete effect
+$m_{ijk}(\theta)$, the weighted average effect is
+\[
+\widehat{\mathrm{AME}}_{jk}
+= \sum_i\alpha_i m_{ijk}(\hat\theta).
+\]
+This is the calculation used by `marg.type = "aveacr"`. Mullahy's
+Appendix 1 defines average partial effects using these normalised
+observation weights. With appropriate sampling weights, the empirical
+average represents the population distribution encoded by those weights;
+with equal weights, it represents the observed sample distribution.
 
-These means and averages are unweighted even when estimation weights
-were supplied. The latter affect the fitted coefficients and their
-covariance, rather than the averaging rule for partial effects.
-Observation-level effects are retained in `marg.list`, allowing their
-variation to be plotted with base R graphics.
+`marg.type = "atmean"`, the default, instead evaluates the effect at the
+weighted mean design profile:
+\[
+\bar x_w = \sum_i\alpha_i x_i,\qquad
+\widehat{\mathrm{MEM}}_{jk}=m_{jk}(\bar x_w;\hat\theta).
+\]
+For a discrete effect, the selected column is
+still replaced by its endpoints from the positive-weight observations.
+An explicit `at` profile is used exactly as supplied, without further
+averaging. In a nonlinear model, the effect at the weighted mean generally
+differs from the weighted mean of the effects. Mean binary indicators
+may also describe a profile that no individual has.
+
+The normalised weights are unchanged when all input weights are
+multiplied by a common positive constant. Zero-weight observations have
+no influence on these means, average effects, or automatic endpoints.
+Profile plots use the same weighted means for the other design columns
+and a grid spanning the positive-weight observations. Inheriting the
+estimation weights for averaging is also the default convention described
+in the [Stata margins manual](https://www.stata.com/manuals/rmargins.pdf).
+
+Observation-level effects remain in `marg.list`, and the weights are
+retained in `weights`. Each observation-level effect is a derivative or
+discrete change, rather than that change multiplied by the observation's
+weight. The same distinction applies to fitted shares, residuals,
+individual aggregates, and plotted points.
 
 ## Standard errors and hypothesis tests
 
+Let $a_k(\theta)$ be the $J$-vector of requested outcome effects for
+covariate $k$: either weighted average effects or effects at a reference
+profile. Conditional on the observed design and weights, the delta
+method would approximate its covariance by
+\[
+\mathrm{Var}\{a_k(\hat\theta)\mid x,w\}
+\approx D_k\,\widehat{\mathrm{Var}}(\hat\theta)\,D_k',
+\qquad D_k=\frac{\partial a_k(\theta)}{\partial\theta'}\bigg|_{\hat\theta}.
+\]
+For average effects, the derivative is also a weighted average, with
+$m_{ik}$ collecting the effects across outcomes:
+$D_k=\sum_i\alpha_i\,\partial m_{ik}(\theta)/\partial\theta'$,
+evaluated at $\hat\theta$. For effects at the mean, the weighted profile
+is held fixed when differentiating. The delta method is given here to
+explain the propagation of coefficient uncertainty; the package computes
+effect covariance by simulation instead.
+
 With `se = TRUE`, `effects.fmlogit()` uses the simulation-based
-Krinsky--Robb method. For each simulation index $r = 1,\ldots,R$, it draws
+**Krinsky--Robb method**. For each simulation index $r = 1,\ldots,R$, it draws
 \[
 \theta^{(r)} \sim
 N\!\left(\hat\theta,\widehat{\mathrm{Var}}(\hat\theta)\right),
 \]
-recomputes the requested effect, and uses the sample standard deviation
-of these effects as its standard error. Drawing the entire coefficient
-vector together preserves covariance across outcomes and covariates.
-The first outcome's coefficients remain zero in every draw.
+and recomputes $a_k^{(r)}=a_k(\theta^{(r)})$. For average effects, every
+draw uses the same $\alpha_i$ to average the observation-level effects.
+For effects at the mean, every draw uses the same weighted mean profile
+or the same explicit `at` values. The first outcome's coefficients remain
+zero in every draw.
+
+The simulation covariance and standard errors are
+\[
+\bar a_k^{\mathrm{sim}}=\frac{1}{R}\sum_r a_k^{(r)},\qquad
+C_k=\frac{1}{R-1}\sum_r
+ (a_k^{(r)}-\bar a_k^{\mathrm{sim}})
+ (a_k^{(r)}-\bar a_k^{\mathrm{sim}})',\qquad
+\mathrm{SE}_{jk}=\sqrt{(C_k)_{jj}}.
+\]
+The simulation draws are equally likely, so this is an ordinary,
+unweighted sample covariance across draws. Survey weights apply to
+observations inside each draw's effect calculation, not to the draws
+themselves. Reported point estimates remain $a_k(\hat\theta)$, rather
+than the simulation mean.
+
+Drawing the entire coefficient vector together preserves covariance
+across outcomes and covariates. The package retains each $J$-by-$J$
+outcome covariance block $C_k$ in `cov.list`. Separate blocks are retained
+for each selected covariate; the output does not contain a covariance
+matrix for arbitrary contrasts between effects of different covariates.
 
 This relies on an estimated asymptotic normal distribution, not a known
-finite-sample distribution. It holds the observed design or chosen
-profile fixed. A population-average effect may require accounting for
-uncertainty in the covariate distribution as well.
+finite-sample distribution. It holds the observed design and weights, or
+chosen profile, fixed. A population-average effect may require accounting
+for uncertainty in the covariate distribution as well, as explained below.
 
-Reported z statistics divide the point estimate by its simulated standard
+Reported $z$ statistics divide the point estimate by its simulated standard
 error; two-sided p-values use the standard normal approximation. Wald
 intervals, such as the estimate plus or minus 1.96 standard errors,
 use this same approximation. The package does not report simulation
 percentile intervals. The delta method also supports standard errors,
 intervals, and hypothesis tests; Krinsky--Robb is an alternative
-approximation. Mullahy additionally illustrates bootstrap inference.
+approximation. Mullahy (2015) additionally illustrates bootstrap inference.
 Use `set.seed()` for reproducibility and increase `R` when simulation
 variation matters.
 
@@ -214,26 +340,134 @@ them. Values may represent costs or returns; the function does not
 estimate willingness to pay from preferences. The units of an aggregate
 effect depend on these supplied values.
 
-Its current standard errors use an independence approximation, omitting
-covariance between outcome effects. This approximation does not provide
-the full joint uncertainty of an aggregate. Optional bars in fitted-model
-plots use the same approximation. The joint coefficient draws used by
-`effects.fmlogit()` do not remove this separate limitation.
+Let $v$ contain the supplied category values, in outcome order. The
+aggregate effect for covariate $k$ and its conditional variance are
+\[
+b_k = v'a_k(\hat\theta), \qquad \widehat{\mathrm{Var}}(b_k\mid x,w) = v'C_kv.
+\]
+`wtp()` uses the covariance block in `cov.list`, calculated from the same
+joint coefficient draws as the effect SEs. It retains covariance between
+outcome effects, rather than adding their variances separately. Optional
+bars in fitted-model plots use this same calculation. Both calculations
+treat the category values as fixed.
+
+Observation weights have already entered the average effect $a_k$.
+Multiplication by $v$ then combines outcomes, rather than weighting
+observations a second time. When individual aggregates are requested,
+`wtp.obs` contains $v'm_{ik}(\hat\theta)$ for each observation.
+Their weighted mean agrees with the corresponding aggregate of average
+effects. Since the outcome effects sum to zero, assigning the same value
+to every category gives zero aggregate effect and zero SE, up to rounding.
+
+# Sampling weights and the target of inference
+
+## Heterogeneity is different from a standard error
+
+The observation-level effects can vary greatly even when their average
+is precisely estimated. A descriptive measure of their spread is the
+variance under the weighted empirical distribution:
+\[
+s_{jk,w}^2=\sum_i\alpha_i
+\{m_{ijk}(\hat\theta)-\widehat{\mathrm{AME}}_{jk}\}^2.
+\]
+This describes heterogeneity across the represented covariate profiles.
+It is not the variance of the estimated average effect. The individual
+effects all depend on the same fitted coefficients, so their estimation
+errors are correlated. In particular,
+\[
+\mathrm{Var}(\widehat{\mathrm{AME}}_{jk}\mid x,w)
+=\sum_i\sum_{\ell}\alpha_i\alpha_{\ell}
+  \mathrm{Cov}\{m_{ijk}(\hat\theta),m_{\ell jk}(\hat\theta)\mid x,w\}.
+\]
+Replacing this expression by a weighted variance of individual effects,
+or by that variance divided by a sample size, would discard the shared
+coefficient uncertainty. Recomputing the whole weighted average in every
+Krinsky--Robb draw carries these covariances through automatically.
+
+## A fixed sample distribution and a population distribution
+
+The package reports coefficient uncertainty for effects evaluated over
+the observed weighted covariate distribution. That is a conditional
+calculation: the profiles, weights, and automatic endpoints are held
+fixed across coefficient draws. With valid sampling weights the point
+estimate can also represent a population-average effect. Uncertainty for
+that population target generally has an additional contribution because
+the covariate distribution was itself sampled.
+
+Mullahy's Appendix 1 distinguishes resampling both coefficients and
+covariates from varying coefficients while holding the evaluation
+profiles fixed. The [Stata margins manual](https://www.stata.com/manuals/rmargins.pdf)
+similarly distinguishes conditional covariance from its
+`vce(unconditional)` calculation. `fmlogit` implements the former
+interpretation with Krinsky--Robb simulation; it does not implement
+unconditional effect covariance.
+
+For a compact illustration, consider marginal effects or discrete effects
+with prespecified endpoints. Suppose observations, including their known
+weights, are independent draws from a sampling distribution. Write
+$\mu_w=\mathbb{E}(w_i)$ and let the population target for covariate $k$ be
+$A_k=E\{w_i m_{ik}(\theta_0)\}/\mu_w$. If the coefficient estimator has
+influence function $\psi_{\theta,i}$, a first-order expansion gives
+\[
+\psi_{A_k,i}
+=\underbrace{\frac{w_i}{\mu_w}
+  \{m_{ik}(\theta_0)-A_k\}}_{\text{sampling the covariate distribution}}
+ +\underbrace{\mathcal{D}_k\psi_{\theta,i}}_{
+  \text{estimating the coefficients}},\qquad
+\mathcal{D}_k=\frac{\mathbb{E}\{w_i\,\partial m_{ik}(\theta_0)/\partial\theta'\}}
+ {\mu_w}.
+\]
+Here $m_{ik}$ collects the effects across outcomes, and, for the weighted
+estimating equations above,
+$\psi_{\theta,i}=\mathcal{H}^{-1}g_i(\theta_0)$ with
+$\mathcal{H}=E\{-\partial g_i(\theta_0)/\partial\theta'\}$.
+The variance of the full influence function includes both terms and
+their covariance. In this independent-observation illustration,
+$\hat A_k-A_k\approx N^{-1}\sum_i\psi_{A_k,i}$, so the asymptotic
+covariance is $\mathrm{Var}(\psi_{A_k,i})/N$.
+Adding a measure of sample heterogeneity to the
+conditional SE would not reproduce this calculation. This expansion
+explains a different inferential target; it is not an additional estimator
+implemented by the package. It also does not cover estimated weights
+or a complex survey design without further work. Unconditional inference
+for contrasts defined by sample minima and maxima would also need to
+address the randomness of those endpoints.
+
+## Survey design requires more than observation weights
+
+Inverse-inclusion-probability weights can correct unequal representation,
+subject to the sampling and weighting assumptions. They do not, by
+themselves, supply the joint inclusion information needed for a
+design-based variance. The official
+[survey package manual](https://r-forge.r-universe.dev/survey/doc/manual.html)
+describes designs using cluster identifiers, strata, finite-population
+information, or replicate weights in addition to observation weights.
+Its variance calculations can combine contributions within primary
+sampling units, account for stratification, and apply a finite-population
+correction where appropriate.
+
+The current `fmlogit` covariance instead uses independent
+observation-level score outer products. It does not perform those survey
+design calculations, estimate additional uncertainty from constructed
+weights, or provide unconditional variance for population-average effects.
+The joint outcome covariance used by `wtp()` improves the aggregation of
+the implemented conditional uncertainty; it does not add these separate
+components.
 
 # Practical concerns
 
-Supply mutually exclusive and exhaustive shares on a zero-to-one scale.
+* **Supply mutually exclusive and exhaustive shares on a zero-to-one scale.**
 A share based on a zero total is undefined. Rows with missing responses
 or covariates are removed together; `fit$rowNo` records their original
 positions, and estimation weights follow the same rows.
 
-Check convergence information and investigate poorly scaled covariates,
+* **Check convergence information and investigate poorly scaled covariates**,
 redundant design columns, or weakly identified outcomes when estimation
-fails. Optimizer choice can affect convergence and numerical accuracy;
+fails. Optimiser choice can affect convergence and numerical accuracy;
 it should not define a different estimand. Compare fitted shares and
 effects over meaningful profiles with support in the data.
 
-Robust inference does not establish a causal interpretation. A suitable
+* **Robust inference does not establish a causal interpretation.** A suitable
 research design and identifying assumptions are needed for that purpose.
 Ordinary likelihood-ratio inference should not be applied automatically
 to a quasi-likelihood. Alternative links, two-part participation models,
@@ -260,3 +494,9 @@ and the specification tests reviewed by Ramalho, Ramalho, and Murteira
   using fractional logit methodology. In H. S. Mahmassani (Ed.),
   *Transportation and Traffic Theory: Flow, Dynamics, and Human Interaction*,
   507--524. Elsevier.
+- StataCorp. [margins: Marginal means, predictive margins, and marginal
+  effects](https://www.stata.com/manuals/rmargins.pdf).
+  *Stata Base Reference Manual*, options and methods/formulas.
+- Lumley, T., and the survey package contributors.
+  [survey: Analysis of Complex Survey Samples](https://r-forge.r-universe.dev/survey/doc/manual.html).
+  Reference manual, especially `svydesign`, `svyrecvar`, and `svyglm`.
