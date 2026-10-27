@@ -1,10 +1,10 @@
-#' Plot partial effects and user-valued aggregates
+#' Plot partial effects and their aggregates
 #'
 #' @name plot.fmlogit
 #' @aliases plot.fmlogit.margins
 #' @description
-#' Plot observation-level marginal or discrete effects, or their user-valued
-#' aggregates from \code{wtp()}, using base R graphics.
+#' Plot marginal or discrete effects for each observation, or their aggregates
+#' from \code{wtp()}, using base R graphics.
 #'
 #' @param x An \code{"fmlogit.margins"} object computed with
 #'   \code{marg.type = "aveacr"}, or an \code{"fmlogit"} fit for aggregate plots.
@@ -16,7 +16,7 @@
 #' @param against For margins, a numeric vector of horizontal coordinates.
 #'   For a fitted model, a non-intercept design-column name: vary that column
 #'   from its minimum to maximum among positive-weight observations, fixing
-#'   other columns at their fitted-weight means.
+#'   other columns at their weighted means from the fitted model.
 #'   The default in both methods is to plot the observed effects by row number.
 #' @param against.x,against.y Column name in \code{x.data} or \code{y} to use as the
 #'   horizontal axis. Supply only one of the three axis arguments.
@@ -27,13 +27,15 @@
 #' @param mfrow Optional two-element panel layout, as in \code{par(mfrow = ...)}.
 #'   By default, use a layout close to square. Graphics settings are restored.
 #' @param type Base graphics plot type; defaults to points for margins and
-#'   lines for aggregates. Lines connect increasing horizontal coordinates within groups.
-#' @param plot.show Logical; draw the plots? Plotting data are returned either way.
+#'   lines for aggregates. Lines join points in increasing order of their horizontal
+#'   coordinates within each group.
+#' @param plot.show Logical; draw the plots? Plotting data are returned in either case.
 #' @param xlab Optional horizontal-axis label.
 #' @param wtp.vec Numeric outcome values, in the order of the fitted outcome columns.
 #' @param t Number of evaluation points when varying \code{against}.
 #' @param effect Either \code{"discrete"} (the default) or \code{"marginal"}.
-#' @param se Compute pointwise aggregate SEs and draw plus/minus one SE?
+#' @param se Compute standard errors for the aggregate at each point and show
+#'   bars extending one SE in either direction?
 #'   Defaults to \code{FALSE}.
 #' @param R Number of Krinsky-Robb draws per evaluation point when \code{se = TRUE}.
 #' @param ... Base graphics options, including \code{col}, \code{pch},
@@ -46,13 +48,14 @@
 #'
 #' The fitted-model method aggregates effects using \code{wtp.vec}. Optional
 #' pointwise SEs use the joint outcome-effect covariance from
-#' \code{effects.fmlogit()} through \code{wtp()}. They condition on the
-#' evaluation design and fitted weights and can be slow to simulate.
-#' Use \code{set.seed()} for reproducible SEs. The bars represent one SE,
-#' rather than a particular confidence level.
-#' Grid profiles inherit observation weights for their fixed design means and
-#' observed range. Observation-level plots retain every row, including
-#' zero-weight observations, without rescaling the individual effects.
+#' \code{effects.fmlogit()} through \code{wtp()}. They hold the evaluation design
+#' and estimation weights fixed and may take some time to simulate.
+#' Use \code{set.seed()} for reproducible SEs. Each bar extends one SE on either
+#' side of the estimate.
+#' For a profile curve, other design columns are fixed at their weighted means,
+#' and the grid spans the positive-weight observations. Plots of individual
+#' effects retain every row, including zero-weight observations, without
+#' rescaling the effects.
 #' Effects refer to processed design columns; varying one column does not
 #' update related factor indicators, powers, or interactions. See
 #' \code{effects.fmlogit()} for the reference-profile and averaging definitions.
@@ -61,7 +64,7 @@
 #'   \code{effects}, a matrix with one row per coordinate and one column per
 #'   panel; \code{se}, a matching matrix or \code{NULL}; and \code{group}, a
 #'   factor or \code{NULL}. Margins columns are named \code{variable:outcome};
-#'   Aggregate columns are covariate names. Rows retain their input order even when
+#'   aggregate columns use covariate names. Rows retain their input order even when
 #'   lines are drawn in coordinate order.
 #'
 #' @examples
@@ -126,7 +129,7 @@ plot.fmlogit.margins <- function(x, varlist = NULL, x.data = NULL, y = NULL,
     group <- group.algebra(group)
   }
   if (!is.null(group)) {
-    if (length(group) != N || anyNA(group)) stop("'group' must have one nonmissing value per observation.")
+    if (length(group) != N || anyNA(group)) stop("'group' must have one non-missing value per observation.")
     group <- factor(group)
   }
 
@@ -207,12 +210,12 @@ plot.fmlogit <- function(x, wtp.vec, varlist = NULL, against = NULL,
   invisible(plot.data)
 }
 
-# Shared selection and plotting keep both methods on the same data/graphics path.
+# Both methods use these helpers to select variables and draw plots.
 plotVariables <- function(varlist, xnames) {
   if (is.null(varlist)) varlist <- setdiff(xnames, "(Intercept)")
   if (!is.character(varlist) || !length(varlist) || anyNA(varlist) ||
       anyDuplicated(varlist) || anyNA(match(varlist, xnames))) {
-    stop("'varlist' must contain distinct, recognized covariate names.")
+    stop("'varlist' must contain distinct, recognised covariate names.")
   }
   varlist
 }

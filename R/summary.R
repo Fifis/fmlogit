@@ -1,7 +1,7 @@
 #' Generate summary tables for fmlogit objects
 #'
-#' Generate tables of coefficient estimates, partial effects, and user-valued
-#' aggregates from fractional multinomial logit results.
+#' Generate tables of coefficient estimates, partial effects, and aggregates
+#' calculated from supplied outcome values in a fractional multinomial logit model.
 #'
 #' @name summary.fmlogit
 #' @aliases summary.fmlogit.margins
@@ -10,14 +10,14 @@
 #' @param object An object of class \code{"fmlogit"}, \code{"fmlogit.margins"},
 #'   or \code{"fmlogit.wtp"}.
 #' @param varlist Covariate names to select, in the desired output order.
-#'   Defaults to all available covariates. Unrecognized names are omitted
+#'   Defaults to all available covariates. Unrecognised names are omitted
 #'   with a warning.
-#' @param sepline Use separate rows for estimates and SEs?
+#' @param sepline Show estimates and their standard errors on separate rows?
 #' @param digits Number of significant digits; defaults to three.
-#' @param add.info Include sample, baseline, or effect descriptions?
+#' @param add.info Include details of the sample, baseline, or reported effects?
 #' @param list Return a list instead of a data frame? Used by the fitted-model
 #'   and margins methods.
-#' @param sigcode Decreasing p-value cutoffs for significance symbols.
+#' @param sigcode Decreasing p-value thresholds for significance symbols.
 #' @param print Also print the returned table?
 #' @param ... Unused additional arguments.
 #' @return For fitted models and margins, a list with \code{estimates} and
@@ -25,7 +25,7 @@
 #'   For aggregates without SEs, a matrix of point estimates; with SEs, a
 #'   data frame or, when \code{sepline = TRUE}, a character vector.
 #'
-#' @details This module provides summary methods for three fmlogit objects:
+#' @details These methods summarise objects of three classes:
 #' \code{fmlogit}, \code{fmlogit.margins}, and \code{fmlogit.wtp}.
 #'
 #' Coefficient tables omit the first, baseline outcome because its coefficients
@@ -34,12 +34,13 @@
 #' the baseline outcome: its share can change even though its coefficients
 #' are zero.
 #'
-#' SEs appear only when available in the input object. Coefficient SEs use the
-#' full joint HC0 covariance; partial-effect SEs use Krinsky-Robb simulation.
+#' Standard errors are shown only when available in the input object.
+#' Coefficient SEs use the full joint HC0 covariance; partial-effect SEs use
+#' Krinsky-Robb simulation.
 #' Aggregate SEs use the joint covariance of outcome effects from those draws.
-#' The stored z statistics and two-sided normal p-values determine
-#' the significance symbols. Fitted-model descriptions report the maximised
-#' quasi-log-likelihood, not a fully specified probability likelihood.
+#' The significance symbols follow the stored two-sided normal p-values.
+#' Fitted-model summaries report the maximised quasi-log-likelihood, rather
+#' than a likelihood for a fully specified distribution.
 #'
 #' @examples
 #' x <- data.frame(income = seq(-1, 1, length.out = 30))
@@ -57,12 +58,12 @@
 summary.fmlogit <- function(object, varlist = NULL, sepline = FALSE, digits = 3,
                             add.info = TRUE, list = TRUE,
                             sigcode = c(0.1, 0.05, 0.01, 0.001), print = FALSE, ...) {
-  if (!inherits(object, "fmlogit")) stop("Expect an fmlogit object. Wrong object type given.")
+  if (!inherits(object, "fmlogit")) stop("'object' must be an fmlogit object.")
   ynames <- names(object$estimates)
   xnames <- rownames(object$estimates[[1L]])
   if (length(varlist) == 0) varlist <- xnames
   var.col.no <- match(varlist, xnames)
-  if (anyNA(var.col.no)) warning("Some variables requested are not in the variable list. Those variables are omitted.")
+  if (anyNA(var.col.no)) warning("Some requested covariates were not found and have been omitted.")
   var.col.no <- var.col.no[!is.na(var.col.no)]
   J <- object$count[3]
   n.vars <- length(var.col.no)
@@ -114,12 +115,12 @@ summary.fmlogit.margins <- function(object, varlist = NULL, sepline = FALSE,
                                     digits = 3, add.info = TRUE, list = TRUE,
                                     sigcode = c(0.05, 0.01, 0.001),
                                     print = FALSE, ...) {
-  if (!inherits(object, "fmlogit.margins")) stop("Expect an fmlogit.margins object. Wrong object type given.")
+  if (!inherits(object, "fmlogit.margins")) stop("'object' must be an fmlogit.margins object.")
   ynames <- rownames(object$effects)
   xnames <- colnames(object$effects)
   if (length(varlist) == 0) varlist <- xnames
   var.col.no <- match(varlist, xnames)
-  if (anyNA(var.col.no)) warning("Some variables requested are not in the variable list. Those variables are omitted.")
+  if (anyNA(var.col.no)) warning("Some requested covariates were not found and have been omitted.")
   var.col.no <- var.col.no[!is.na(var.col.no)]
   J <- length(ynames)
   n.vars <- length(var.col.no)
@@ -169,12 +170,12 @@ summary.fmlogit.margins <- function(object, varlist = NULL, sepline = FALSE,
 summary.fmlogit.wtp <- function(object, varlist = NULL, sepline = FALSE,
                                 digits = 3, sigcode = c(0.05, 0.01, 0.001),
                                 print = FALSE, ...) {
-  if (!inherits(object, "fmlogit.wtp")) stop("Expect an fmlogit.wtp object. Wrong object type given.")
+  if (!inherits(object, "fmlogit.wtp")) stop("'object' must be an fmlogit.wtp object.")
   has.se <- identical(colnames(object$wtp), c("Estimate", "Std. Error", "z value", "Pr(>|z|)"))
   xnames <- if (has.se) rownames(object$wtp) else colnames(object$wtp)
   if (length(varlist) == 0) varlist <- xnames
   var.col.no <- match(varlist, xnames)
-  if (anyNA(var.col.no)) warning("Some variables requested are not in the variable list. Those variables are omitted.")
+  if (anyNA(var.col.no)) warning("Some requested covariates were not found and have been omitted.")
   var.col.no <- var.col.no[!is.na(var.col.no)]
   n.vars <- length(var.col.no)
   if (n.vars == 0L) stop("No matching variables in 'varlist'.")

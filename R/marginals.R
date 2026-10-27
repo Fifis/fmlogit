@@ -2,33 +2,35 @@
 #'
 #' @description
 #' Calculates marginal derivatives or discrete changes in the fitted shares of
-#' a fractional multinomial logit model, at the mean design or averaged over
-#' the retained observations.
+#' a fractional multinomial logit model, either at the weighted mean of the
+#' design values or averaged over the retained observations.
 #'
 #' @param object An object of class \code{"fmlogit"}.
 #' @param effect Either \code{"marginal"} for derivatives or \code{"discrete"}
 #'   for changes from the minimum to the maximum among positive-weight rows.
 #' @param marg.type Either \code{"atmean"} (the default) to evaluate effects at
-#'   the weighted mean design, or \code{"aveacr"} for weighted average effects.
+#'   the weighted mean of the design values, or \code{"aveacr"} for weighted
+#'   average effects.
 #' @param se Logical; compute simulation-based Krinsky-Robb standard errors?
 #' @param varlist Character vector of column names in \code{object$x}, in the
 #'   desired output order. By default, all columns except the first, intercept
 #'   column are selected. Use \code{"(Intercept)"} to select the intercept.
 #' @param at Optional finite numeric vector of length \code{K - 1}, giving the
 #'   non-intercept design values in the order of \code{colnames(object$x)[-1]}.
-#'   Only supported with \code{marg.type = "atmean"}.
+#'   Available only with \code{marg.type = "atmean"}.
 #' @param R Number of joint coefficient draws for Krinsky-Robb standard errors;
 #'   an integer of at least two when \code{se = TRUE}. Defaults to 1000.
 #' @param ... Unused additional arguments.
 #'
 #' @details
-#' With the first outcome normalized to \eqn{\beta_1 = 0}{beta_1 = 0}, the
+#' With the first outcome normalised to \eqn{\beta_1 = 0}{beta_1 = 0}, the
 #' conditional mean shares and their marginal derivatives are
 #' \deqn{p_{ij} = \frac{\exp(x_i' \beta_j)}{\sum_h \exp(x_i' \beta_h)},}
 #' \deqn{\frac{\partial p_{ij}}{\partial x_{ik}} =
 #'   p_{ij}\left(\beta_{jk} - \sum_h p_{ih}\beta_{hk}\right).}
 #' Discrete effects replace design column \eqn{k} by its observed minimum and
-#' maximum, keeping all other columns fixed, and subtract the resulting shares.
+#' maximum, keeping all other columns fixed, and take the difference between
+#' the resulting shares.
 #' Effects sum to zero across outcomes because the fitted shares sum to one.
 #'
 #' Both summaries inherit \code{object$weights}, normalised to sum to one.
@@ -36,7 +38,7 @@
 #' unless \code{at} supplies their values. For \code{"aveacr"}, the effects are
 #' computed for each retained observation and then averaged with these weights.
 #' Discrete endpoints are the minimum and maximum among positive-weight rows.
-#' Individual effects remain unweighted values, including on zero-weight rows.
+#' Individual effects remain unweighted, including those for zero-weight rows.
 #' Effects refer to processed design columns. For factor indicators and
 #' interactions, changing one column does not reconstruct the original data
 #' or update related design columns.
@@ -44,14 +46,15 @@
 #' The simulation-based Krinsky-Robb method draws the entire non-baseline
 #' coefficient vector from its estimated joint normal distribution,
 #' \eqn{\theta^{(r)} \sim N(\hat\theta, \widehat{\mathrm{Var}}(\hat\theta))}.
-#' Each draw preserves the baseline normalization and recomputes the requested
+#' Each draw preserves the baseline normalisation and recomputes the requested
 #' effect using the same design values and observation weights. The ordinary,
-#' unweighted sample covariance across draws estimates effect uncertainty;
-#' simulation draws do not carry survey weights. This uses
+#' unweighted sample covariance across draws estimates the uncertainty in the
+#' effects; simulation draws do not carry survey weights. This uses
 #' \code{object$vcov.full}, including covariance between outcomes and covariates,
-#' and conditions on the observed design and weights. This is coefficient
-#' uncertainty, not the weighted dispersion of individual effects. It does not
-#' include uncertainty in the covariate distribution or account for survey
+#' and treats the observed design and weights as fixed. This measures
+#' uncertainty arising from coefficient estimation, rather than the weighted
+#' dispersion of individual effects. It does not include uncertainty in the
+#' covariate distribution or account for survey
 #' clusters, strata, or finite-population corrections. Use \code{set.seed()}
 #' for reproducible simulations. The reported z statistics and two-sided
 #' p-values use a normal approximation.
@@ -67,7 +70,8 @@
 #' \item{weights}{The retained observation weights inherited from the fit.}
 #' \item{cov.list}{A named list of \code{J}-by-\code{J} covariance matrices
 #'   between outcome effects for each selected covariate, present if
-#'   \code{se = TRUE}. Used for joint aggregate inference in \code{wtp()}.}
+#'   \code{se = TRUE}. These are used for inference on aggregate effects in
+#'   \code{wtp()}.}
 #' \item{R}{The number of simulation draws, or zero if \code{se = FALSE}.}
 #' \item{expl}{A brief description of the effects and inference.}
 #' }
@@ -97,7 +101,7 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
   }
 
   # Match fmlogit(): x is N x K with the intercept first; y is N x J.
-  # theta.hat stacks K coefficients per non-baseline outcome (j = 2, ..., J).
+  # theta.hat stacks K coefficients for each non-baseline outcome (j = 2, ..., J).
   x <- object$x
   y <- object$y
   N <- nrow(y)
@@ -122,7 +126,7 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
     stop("'varlist' must select distinct covariate names; use '(Intercept)' for an intercept-only model.")
   }
   var.col.no <- match(varlist, xnames)
-  if (anyNA(var.col.no)) stop("Unrecognized covariate names in 'varlist'.")
+  if (anyNA(var.col.no)) stop("Unrecognised covariate names in 'varlist'.")
   n.vars <- length(var.col.no)
 
   if (!is.null(at) && marg.type != "atmean") {
@@ -146,14 +150,14 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
   }
   eval.weights <- if (marg.type == "aveacr") weights else 1
 
-  # Evaluate the same statistic for the fitted coefficients and every KR draw.
+  # Evaluate the same statistic for the fitted coefficients and each simulated draw.
   evaluate <- function(theta, keep = FALSE) {
     effects.mat <- matrix(NA_real_, nrow = J, ncol = n.vars,
                           dimnames = list(ynames, varlist))
     marg.list <- if (keep) stats::setNames(vector("list", n.vars), varlist) else NULL
     if (effect == "marginal") {
       # p_ij = exp(x_i' beta_j) / sum_h exp(x_i' beta_h), beta_1 = 0.
-      # Reuse the estimator's stable softmax rather than exponentiating directly.
+      # Use the estimator's softmax calculation to avoid numerical overflow.
       model <- softmax(theta, x.eval, J)
       p <- model$p
       beta <- model$beta
@@ -165,7 +169,7 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
         beta.bar <- as.vector(p %*% beta.k)
         marg.mat <- sweep(p, 2L, beta.k, FUN = "*") - p*beta.bar
       } else {
-        # Use endpoints of the support with positive observation weight.
+        # Use the minimum and maximum among observations with positive weights.
         # Delta_ijk = p_j(x_i with x_ik = max x_k) - p_j(x_i with x_ik = min x_k).
         x.min <- x.max <- x.eval
         x.min[, k] <- min(x[positive, k])
@@ -173,7 +177,7 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
         marg.mat <- softmax(theta, x.max, J)$p - softmax(theta, x.min, J)$p
       }
       dimnames(marg.mat) <- list(rownames(x.eval), ynames)
-      # AME_jk = sum_i w_i m_ijk / sum_i w_i; at a profile there is one row.
+      # AME_jk = sum_i w_i m_ijk / sum_i w_i; a single profile has one row.
       effects.mat[, xnames[k]] <- weightedColMeans(marg.mat, eval.weights)
       if (keep) marg.list[[xnames[k]]] <- marg.mat
     }
@@ -189,8 +193,8 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
         !isSymmetric(vcov.full, tol = 1e-8)) {
       stop("'object$vcov.full' must be a finite, symmetric d-by-d joint covariance matrix.")
     }
-    # A symmetric eigen square root also permits singular HC0 covariance.
-    # Clip only round-off negatives; materially negative eigenvalues are invalid.
+    # An eigenvalue decomposition also permits singular HC0 covariance matrices.
+    # Set negative eigenvalues to zero only when they are small enough to reflect rounding.
     vcov.full <- (vcov.full + t(vcov.full))/2
     eigen.vcov <- eigen(vcov.full, symmetric = TRUE)
     tol <- 1e-8*max(abs(eigen.vcov$values))
@@ -201,15 +205,15 @@ effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
 
     # Simulation-based Krinsky-Robb inference:
     # theta^(r) = theta.hat + root z^(r), z^(r) ~ N(0, I_d).
-    # Joint draws retain all cross-coefficient covariance and beta_1 = 0.
+    # Joint draws retain covariance between all coefficients and keep beta_1 = 0.
     theta.draws <- sweep(matrix(stats::rnorm(R*d), nrow = R) %*% t(root),
                          2L, theta.hat, FUN = "+")
     marg.draws <- matrix(NA_real_, nrow = R, ncol = length(outlist$effects))
     for (r in seq_len(R)) {
       marg.draws[r, ] <- evaluate(theta.draws[r, ])$effects
     }
-    # Each draw has already used the observation weights. Across IID draws,
-    # use ordinary covariance (R - 1 denominator), retaining outcome covariance.
+    # Each draw has already used the observation weights. The draws are independent
+    # and identically distributed, so use ordinary covariance (denominator R - 1).
     cov.list <- lapply(seq_len(n.vars), function(k) {
       block <- seq_len(J) + (k-1L)*J
       vcov.k <- stats::cov(marg.draws[, block, drop = FALSE])

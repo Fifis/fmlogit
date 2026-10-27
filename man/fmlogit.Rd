@@ -17,32 +17,32 @@ fmlogit(
 )
 }
 \arguments{
-\item{y}{Numeric N-by-J matrix or data frame of observed shares, `J >= 2`.
-Values must lie in \eqn{[0, 1]} and rows must sum to one.
+\item{y}{Numeric `N`-by-`J` matrix or data frame of observed shares,
+`J >= 2`. Values must lie in [0, 1] and rows must sum to one.
 The first column is automatically treated as the baseline.}
 
 \item{x}{`N`-row matrix or data frame of regressors. Numeric, factor, and
 character columns are allowed in data frames. An intercept is added
 automatically as the first column. Any supplied constant columns are
-removed before creating the design matrix. No variable selection is done.}
+removed before creating the design matrix. No variable selection is made.}
 
-\item{weights}{Optional nonnegative observation weights, length `N`. The
+\item{weights}{Optional non-negative observation weights, length `N`. The
 default is equal weights. These relative weights multiply the individual
 quasi-log-likelihood contributions; rescaling them leaves estimates and
 the HC0 covariance unchanged. They are inherited by mean profiles and
-average partial effects. They are not frequency weights, and weights alone
-do not specify a complex survey design.
-Computation normalises weights to mean one for numerical stability;
+average partial effects.
+The weights are normalised to mean one for numerical stability;
 the object retains the original weights and quasi-log-likelihood scale.}
 
-\item{beta0}{Optional starting coefficients, length `(J-1) * K`, where `K` is
+\item{beta0}{Optional starting coefficients, length `(J-1)*K`, where `K` is
 the number of columns in the *processed* design matrix including the
-intercept. Ordered by non-baseline outcome, with the intercept first in
-each block. If NULL, compare pairwise fractional binary logits from
-[initEst()] with zero coefficients and use the better starting objective.}
+intercept. Coefficients are grouped by non-baseline outcome, with the
+intercept first in each block. If NULL, compare the pairwise fractional
+binary logits from [initEst()] with zero coefficients and use whichever
+gives the larger quasi-log-likelihood.}
 
-\item{method}{Optimiser for [maxLik::maxLik()]; default "BHHH". Use "CG"
-if the estimation is very slow.}
+\item{method}{Optimiser for [maxLik::maxLik()]; default `"BHHH"`. Use `"CG"`
+if estimation is slow.}
 
 \item{iterlim}{Positive iteration limit passed to `maxLik()`.}
 
@@ -53,46 +53,47 @@ if the estimation is very slow.}
 \item{...}{Additional arguments forwarded to [maxLik::maxLik()].}
 }
 \value{
-An object of class "fmlogit". `raw.estimates` contains the stacked
+An object of class `"fmlogit"`. `raw.estimates` contains the stacked
   non-baseline coefficients; `estimates` contains their robust Wald tables.
   `baseline` names the first outcome, and `likelihood` is the maximised
   quasi-log-likelihood. `conv.code` and `convergence` describe optimisation.
   `count`, `y`, `x`, `weights`, and `row.no` describe the retained sample.
-  `coefficient` is J-by-K, with an all-zero first row.
-  `vcov.full` is the complete `K(J-1)`-by-`K(J-1)` joint HC0 covariance matrix.
-  `vcov` is a legacy list of J diagonal blocks of `vcov.full`, with a zero
-  block for the normalized baseline (cross-category blocks are only in
+  `coefficient` is `J`-by-`K`, with an all-zero first row. `vcov.full` is
+  the complete `K(J-1)`-by-`K(J-1)` joint HC0 covariance matrix.
+  `vcov` is a legacy list of `J` diagonal blocks of `vcov.full`, with a zero
+  block for the normalised baseline (cross-category blocks are only in
   `vcov.full`). `fitted.values` holds the `N`-by-`J` fitted shares.
 }
 \description{
 Estimates a multinomial-logit conditional-mean model for compositional
-outcomes by maximizing the weighted multinomial *quasi*-log-likelihood.
+outcomes by maximising the weighted multinomial *quasi*-log-likelihood.
 The first outcome is the reference category. Robust standard errors are
-computed using the full joint, observation-level sandwich covariance matrix.
+computed using the full joint sandwich covariance matrix, with each
+observation contributing a separate score.
 }
 \details{
 For the first, reference category, \eqn{\beta_1 = 0}{beta_1 = 0}.
 The linear index is \eqn{\eta_{ij} = x_i'\beta_j}{eta_ij = x_i' beta_j}.
 The conditional mean shares are
 \eqn{p_{ij} = \exp(x_i' \beta_j) / \sum_h \exp(x_i' \beta_h)}{p_ij = exp(x_i' beta_j) / sum_h exp(x_i' beta_h)}.
-Here \eqn{p_{ij}} corresponds to \eqn{\xi_k(x;\beta)} in Mullahy (2015),
+Here, \eqn{p_{ij}} corresponds to \eqn{\xi_k(x;\beta)} in
+\insertCite{mullahy2015multivariate}{fmlogit},
 with his outcome index \eqn{k} relabelled \eqn{j}. He normalises the last
 outcome instead; fitted shares and partial effects are invariant to the
 choice of baseline.
 The objective is \eqn{\sum_i w_i \sum_j y_{ij} \log p_{ij}}{sum_i w_i sum_j y_ij log(p_ij)},
-as per \insertCite{mullahy2015multivariate}{fmlogit}.
-The joint HC0 covariance uses the inverse weighted negative Hessian as
-bread and the outer product of the weighted *full* scores as meat.
+as described by \insertCite{mullahy2015multivariate}{fmlogit}.
+The joint HC0 covariance places the sum of outer products of the weighted
+*full* scores between two copies of the inverse weighted negative Hessian.
 For unweighted scores \eqn{s_i}, this is
 \eqn{H^{-1}(\sum_i w_i^2 s_i s_i')H^{-1}}, where
 \eqn{H = -\sum_i w_i\partial s_i/\partial\theta'}.
-The squared weights arise because each score already contains its weight;
-they must not be replaced by a single weight as in frequency replication.
-This is an independent-observation sandwich estimator: weights alone do not
-account for survey clusters, strata, or finite-population corrections
+The squared weights arise because each score already contains its weight.
+This sandwich estimator treats observations as independent: weights alone
+do not account for survey clusters, strata, or finite-population corrections
 \insertCite{papke1996econometric}{fmlogit}.
-Rows with missing responses/covariates are removed before estimation;
-the input weights are subset using exactly the same row indices.
+Rows with missing responses or covariates are removed before estimation;
+the corresponding weights are removed with them.
 }
 \references{
 \insertAllCited{}

@@ -1,4 +1,4 @@
-# Independent mean calculation for finite-difference checks of effects.
+# Calculate mean shares independently to check effects by finite differences.
 shareMeans <- function(x, beta) {
   eta <- tcrossprod(x, beta)
   numerator <- exp(sweep(eta, 1L, apply(eta, 1L, max), "-"))

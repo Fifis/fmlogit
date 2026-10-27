@@ -22,7 +22,8 @@
 for changes from the minimum to the maximum among positive-weight rows.}
 
 \item{marg.type}{Either \code{"atmean"} (the default) to evaluate effects at
-the weighted mean design, or \code{"aveacr"} for weighted average effects.}
+the weighted mean of the design values, or \code{"aveacr"} for weighted
+average effects.}
 
 \item{se}{Logical; compute simulation-based Krinsky-Robb standard errors?}
 
@@ -32,7 +33,7 @@ column are selected. Use \code{"(Intercept)"} to select the intercept.}
 
 \item{at}{Optional finite numeric vector of length \code{K - 1}, giving the
 non-intercept design values in the order of \code{colnames(object$x)[-1]}.
-Only supported with \code{marg.type = "atmean"}.}
+Available only with \code{marg.type = "atmean"}.}
 
 \item{R}{Number of joint coefficient draws for Krinsky-Robb standard errors;
 an integer of at least two when \code{se = TRUE}. Defaults to 1000.}
@@ -51,24 +52,26 @@ An object of class \code{"fmlogit.margins"} with:
 \item{weights}{The retained observation weights inherited from the fit.}
 \item{cov.list}{A named list of \code{J}-by-\code{J} covariance matrices
   between outcome effects for each selected covariate, present if
-  \code{se = TRUE}. Used for joint aggregate inference in \code{wtp()}.}
+  \code{se = TRUE}. These are used for inference on aggregate effects in
+  \code{wtp()}.}
 \item{R}{The number of simulation draws, or zero if \code{se = FALSE}.}
 \item{expl}{A brief description of the effects and inference.}
 }
 }
 \description{
 Calculates marginal derivatives or discrete changes in the fitted shares of
-a fractional multinomial logit model, at the mean design or averaged over
-the retained observations.
+a fractional multinomial logit model, either at the weighted mean of the
+design values or averaged over the retained observations.
 }
 \details{
-With the first outcome normalized to \eqn{\beta_1 = 0}{beta_1 = 0}, the
+With the first outcome normalised to \eqn{\beta_1 = 0}{beta_1 = 0}, the
 conditional mean shares and their marginal derivatives are
 \deqn{p_{ij} = \frac{\exp(x_i' \beta_j)}{\sum_h \exp(x_i' \beta_h)},}
 \deqn{\frac{\partial p_{ij}}{\partial x_{ik}} =
   p_{ij}\left(\beta_{jk} - \sum_h p_{ih}\beta_{hk}\right).}
 Discrete effects replace design column \eqn{k} by its observed minimum and
-maximum, keeping all other columns fixed, and subtract the resulting shares.
+maximum, keeping all other columns fixed, and take the difference between
+the resulting shares.
 Effects sum to zero across outcomes because the fitted shares sum to one.
 
 Both summaries inherit \code{object$weights}, normalised to sum to one.
@@ -76,7 +79,7 @@ For \code{"atmean"}, the reference profile uses weighted design means,
 unless \code{at} supplies their values. For \code{"aveacr"}, the effects are
 computed for each retained observation and then averaged with these weights.
 Discrete endpoints are the minimum and maximum among positive-weight rows.
-Individual effects remain unweighted values, including on zero-weight rows.
+Individual effects remain unweighted, including those for zero-weight rows.
 Effects refer to processed design columns. For factor indicators and
 interactions, changing one column does not reconstruct the original data
 or update related design columns.
@@ -84,14 +87,15 @@ or update related design columns.
 The simulation-based Krinsky-Robb method draws the entire non-baseline
 coefficient vector from its estimated joint normal distribution,
 \eqn{\theta^{(r)} \sim N(\hat\theta, \widehat{\mathrm{Var}}(\hat\theta))}.
-Each draw preserves the baseline normalization and recomputes the requested
+Each draw preserves the baseline normalisation and recomputes the requested
 effect using the same design values and observation weights. The ordinary,
-unweighted sample covariance across draws estimates effect uncertainty;
-simulation draws do not carry survey weights. This uses
+unweighted sample covariance across draws estimates the uncertainty in the
+effects; simulation draws do not carry survey weights. This uses
 \code{object$vcov.full}, including covariance between outcomes and covariates,
-and conditions on the observed design and weights. This is coefficient
-uncertainty, not the weighted dispersion of individual effects. It does not
-include uncertainty in the covariate distribution or account for survey
+and treats the observed design and weights as fixed. This measures
+uncertainty arising from coefficient estimation, rather than the weighted
+dispersion of individual effects. It does not include uncertainty in the
+covariate distribution or account for survey
 clusters, strata, or finite-population corrections. Use \code{set.seed()}
 for reproducible simulations. The reported z statistics and two-sided
 p-values use a normal approximation.

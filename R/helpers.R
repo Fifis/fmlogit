@@ -21,7 +21,7 @@ asterisk <- function(p.value, sigcode = c(0.10, 0.05, 0.01, 0.001)) {
 }
 
 # Shared notation: y is N x J, x is N x K with the intercept first, and beta
-# is J x K with beta_1 = 0. theta stacks the K-vectors for outcomes 2, ..., J.
+# is J x K with beta_1 = 0. theta stacks K coefficients for each outcome 2, ..., J.
 # eta_ij = x_i' beta_j is the linear index; p_ij is the conditional mean share,
 # called xi_k(x; beta) in Mullahy (2015), with his outcome index k renamed j.
 # xi does not denote the linear index.
@@ -57,12 +57,12 @@ fitWeights <- function(object) {
   if (is.null(weights)) weights <- rep(1, N)
   if (!is.numeric(weights) || length(weights) != N ||
       any(!is.finite(weights)) || any(weights < 0) || !any(weights > 0)) {
-    stop("'object$weights' must be finite, nonnegative and aligned with 'object$x', with at least one positive weight.")
+    stop("'object$weights' must be finite, non-negative and aligned with 'object$x', with at least one positive weight.")
   }
   weights
 }
 
-# Each column estimates a mean over the distribution represented by the weights.
+# Average each column over the distribution represented by the weights.
 weightedColMeans <- function(x, weights) {
   weights <- weights/max(weights)  # Keep the normalising sum finite.
   colSums(x*(weights/sum(weights)))

@@ -24,13 +24,13 @@ test_that("Summaries preserve baseline conventions and requested covariate order
   expect_identical(colnames(summary(aggregate, varlist = varlist)), varlist)
 })
 
-test_that("Rounding p-values cannot give a nonsignificant estimate a star", {
+test_that("Rounding p-values cannot give a non-significant estimate a star", {
   fit <- summaryModel()
   set.seed(123)
   margins <- effects(fit, varlist = "income", se = TRUE, R = 10L)
   aggregate <- wtp(margins, c(0, 100))
 
-  # A p-value just above 5% must remain nonsignificant after table formatting.
+  # A p-value just above 5% must remain non-significant after table formatting.
   fit$estimates[[1L]][, 4L] <- 0.05001
   margins$ztable$income[, "Pr(>|z|)"] <- 0.05001
   aggregate$wtp[, "Pr(>|z|)"] <- 0.05001

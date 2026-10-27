@@ -45,19 +45,19 @@
 or \code{"fmlogit.wtp"}.}
 
 \item{varlist}{Covariate names to select, in the desired output order.
-Defaults to all available covariates. Unrecognized names are omitted
+Defaults to all available covariates. Unrecognised names are omitted
 with a warning.}
 
-\item{sepline}{Use separate rows for estimates and SEs?}
+\item{sepline}{Show estimates and their standard errors on separate rows?}
 
 \item{digits}{Number of significant digits; defaults to three.}
 
-\item{add.info}{Include sample, baseline, or effect descriptions?}
+\item{add.info}{Include details of the sample, baseline, or reported effects?}
 
 \item{list}{Return a list instead of a data frame? Used by the fitted-model
 and margins methods.}
 
-\item{sigcode}{Decreasing p-value cutoffs for significance symbols.}
+\item{sigcode}{Decreasing p-value thresholds for significance symbols.}
 
 \item{print}{Also print the returned table?}
 
@@ -70,11 +70,11 @@ For fitted models and margins, a list with \code{estimates} and
   data frame or, when \code{sepline = TRUE}, a character vector.
 }
 \description{
-Generate tables of coefficient estimates, partial effects, and user-valued
-aggregates from fractional multinomial logit results.
+Generate tables of coefficient estimates, partial effects, and aggregates
+calculated from supplied outcome values in a fractional multinomial logit model.
 }
 \details{
-This module provides summary methods for three fmlogit objects:
+These methods summarise objects of three classes:
 \code{fmlogit}, \code{fmlogit.margins}, and \code{fmlogit.wtp}.
 
 Coefficient tables omit the first, baseline outcome because its coefficients
@@ -83,12 +83,13 @@ are fixed at zero. The intercept remains the first design column unless
 the baseline outcome: its share can change even though its coefficients
 are zero.
 
-SEs appear only when available in the input object. Coefficient SEs use the
-full joint HC0 covariance; partial-effect SEs use Krinsky-Robb simulation.
+Standard errors are shown only when available in the input object.
+Coefficient SEs use the full joint HC0 covariance; partial-effect SEs use
+Krinsky-Robb simulation.
 Aggregate SEs use the joint covariance of outcome effects from those draws.
-The stored z statistics and two-sided normal p-values determine
-the significance symbols. Fitted-model descriptions report the maximised
-quasi-log-likelihood, not a fully specified probability likelihood.
+The significance symbols follow the stored two-sided normal p-values.
+Fitted-model summaries report the maximised quasi-log-likelihood, rather
+than a likelihood for a fully specified distribution.
 }
 \examples{
 x <- data.frame(income = seq(-1, 1, length.out = 30))

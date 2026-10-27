@@ -2,9 +2,9 @@
 
 **Fractional multinomial logit for shares that add up to one.**
 
-The `fmlogit` package estimates how covariates relate to the allocation of a
-total across several categories. It provides fitted shares, marginal and
-discrete effects, robust inference, and lightweight plots.
+The `fmlogit` package estimates how covariates relate to the division of a
+total among several categories. It provides fitted shares, marginal and
+discrete effects, robust inference, and simple plots.
 
 The main methodological reference is
 [Mullahy (2015)](https://doi.org/10.1515/jem-2012-0006).
@@ -17,13 +17,13 @@ coefficient tables.
 
 Many outcomes describe how a resource is divided: a household’s spending
 across goods, a portfolio across asset classes, or a day across activities.
-Each observation contains several shares, each between zero and one, with a
-total of one. A person may allocate time to several activities on the same
-day, producing shares such as 0.5, 0.3, and 0.2.
+Each observation contains several shares, each between zero and one, which
+together sum to one. A person may divide time among several activities on
+the same day, giving shares such as 0.5, 0.3, and 0.2.
 
 The model describes the **conditional mean** of each share: the average
-allocation among observations with given covariate values. With observation
-`i`, category `j`, and `J` categories, its mean function is
+allocation among observations with given covariate values. For observation
+`i` and category `j` in a system of `J` categories, the mean function is
 
 $$
 p_{ij} = E(y_{ij} \mid x_i) = \frac{\exp(x_i' \beta_j)}{\sum_{h=1}^{J} \exp(x_i' \beta_h)},
@@ -47,17 +47,17 @@ The same notation is used throughout the package:
 | `theta` | The `d = (J - 1) * K` free coefficients, stacked by outcome, with the intercept first in each block. |
 | `eta` | `N`-by-`J` matrix of linear indices, with entries `x_i' beta_j`. |
 | `p` | `N`-by-`J` matrix of conditional mean shares. |
-| `weights` | The `N` non-negative relative observation weights (counts, survey weights etc.). |
+| `weights` | The `N` non-negative relative observation weights, such as counts or survey weights. |
 
 Mullahy writes the mean share as ξ and uses the last outcome as the
-baseline. Here `p` denotes that same mean, and `eta` names the linear
+baseline. Here `p` denotes the same mean, and `eta` denotes the linear
 index. Changing the baseline changes the coefficient representation,
 while fitted shares and partial effects remain the same.
 
-Observed shares may be exactly zero or one. They can be used directly,
+Observed shares may be exactly zero or one. They may be used directly,
 without replacing zeros by small positive numbers or taking logarithms of
 the observed shares. For finite coefficients, fitted conditional means are
-strictly inside the unit interval. Accepting observed zeros does not mean
+strictly within the unit interval. Allowing observed zeros does not mean
 the model estimates the probability that a share is exactly zero.
 
 The model follows the fractional-response approach of Papke and Wooldridge,
@@ -112,30 +112,30 @@ The rows of `x` describe the same observations. Here `home` is the
 baseline because it is the first column of `y`.
 The illustrative weights give urban observations twice the weight of other
 observations. In a survey application, supply the appropriate sampling
-weights for the population you want to describe.
+weights for the population you wish to describe.
 
 ## Why use fmlogit in R?
 
 ### 1. Integration with the R workflow
 
-Estimation, prediction, effect summaries, and plots can be kept in the same
-R analysis. Standard methods such as `summary()`, `fitted()`,
+Estimation, prediction, summaries of effects, and plots can form part of the
+same R analysis. Standard methods such as `summary()`, `fitted()`,
 `residuals()`, `predict()`, and `vcov()` provide access to the results.
 Plots use base R graphics and can return their underlying data for further
 analysis.
 
 ### 2. Post-estimation on the share scale
 
-A coefficient table describes relative-share parameters. Partial effects
-translate those parameters into changes in expected shares, which are often
+A coefficient table describes parameters for relative shares. Partial effects
+express those parameters as changes in expected shares, which are often
 easier to interpret. You can select the covariates of interest, distinguish
 derivatives from discrete changes, evaluate effects at a chosen profile,
 or average them over the observed sample.
 
-Uncertainty for these effects is available through joint coefficient
-simulation. This supports summaries of effect estimates, standard errors,
+Uncertainty in these effects can be assessed by simulating the coefficients
+jointly. The resulting summaries give effect estimates, standard errors,
 z statistics, and p-values. Plotting individual effects can also reveal
-variation that a single average hides.
+variation that a single average conceals.
 
 ### 3. Estimation flexibility
 
@@ -143,9 +143,9 @@ The covariate input can be a matrix or a data frame. Data-frame factors and
 character variables are converted to design columns during fitting.
 An intercept is added as the first design column, and supplied constant
 columns are removed. Other redundant columns cause a rank-deficiency
-error, so the design still needs to identify the model.
+error, so the design must still identify the model.
 
-Optional nonnegative observation weights enter estimation, its robust
+Optional non-negative observation weights enter estimation, its robust
 covariance calculation, and the mean profiles and average effects used
 after fitting. Optimisation is handled by `maxLik`, with several methods
 available.
@@ -167,8 +167,8 @@ The logit mean function respects both the unit-interval bounds and the
 requirement that shares add up to one. Estimating separate fractional-logit
 equations for each category would not generally impose that common total.
 
-The estimation objective adds up each observed share multiplied by the log
-of its fitted share, across categories and observations. Observation weights
+The estimation objective sums each observed share multiplied by the log
+of its fitted share, over categories and observations. Observation weights
 multiply these contributions when supplied. This is a multinomial
 **quasi-log-likelihood**: the observed shares enter where a categorical
 multinomial logit model would use zero-or-one outcome indicators.
@@ -188,8 +188,8 @@ coefficients.
 The default optimiser is `"BHHH"`. Other supported `maxLik` methods,
 such as `"BFGS"` or `"CG"`, can be selected through `method`.
 Inspect `fit$convergence` and `fit$conv.code` when assessing the result.
-Runtime depends on sample size, the number of coefficients, scaling, and
-convergence; there is no general timing guarantee.
+Computing time depends on sample size, the number of coefficients, scaling,
+and convergence; no general timing guarantee is possible.
 
 ### Step 3. Compute robust standard errors
 
@@ -202,7 +202,7 @@ The Hessian uses each observation's weight once, while the score outer
 products use its square. Multiplying every weight by the same positive
 constant leaves the estimates and HC0 covariance unchanged. These are
 relative observation weights, rather than counts of replicated records.
-The optimizer uses weights scaled to mean one, so their absolute units
+The optimiser uses weights scaled to mean one, so their absolute units
 do not alter its step sizes. Stored weights and the reported
 quasi-log-likelihood retain the input scale.
 
@@ -273,7 +273,7 @@ Two summaries answer different questions:
 | `marg.type = "atmean"` | Use the weighted mean design profile, replacing the selected column by its endpoints for a discrete effect. | The effect at one reference profile. |
 | `marg.type = "aveacr"` | Evaluate effects for each retained observation, then average using the fitted model's observation weights. | The average effect for the distribution represented by those weights. |
 
-With normalized weights $\alpha_i = w_i / \sum_h w_h$, average effects
+With normalised weights $\alpha_i = w_i / \sum_h w_h$, average effects
 are $\sum_i \alpha_i m_{ijk}$, where $m_{ijk}$ is an individual effect.
 The default reference profile is $\bar x_w = \sum_i \alpha_i x_i$.
 Equal weights give the usual arithmetic means. Zero-weight observations
@@ -313,13 +313,13 @@ at["income"] <- 0
 effects.fmlogit(fit, varlist = "income", at = at)$effects
 ```
 
-The values in `at` must follow the non-intercept column order of
+The values in `at` must follow the order of the non-intercept columns of
 `fit$x`. An explicit profile is used as supplied; it is not averaged
 again. For multi-level factors or interactions, a change in one design
 column may not represent a valid change in the original variable. Use
 compatible covariate profiles and update all related design columns when
-constructing such comparisons. Derivatives of a raw variable that also
-enters through powers or interactions require accounting for those terms.
+constructing such comparisons. When differentiating a raw variable that
+also enters through powers or interactions, account for those terms.
 
 ### Predictions and plots
 
@@ -372,7 +372,7 @@ The ordinary sample standard deviation across these equally likely draws
 is the SE. Observation weights apply within each effect calculation;
 they are not weights for the simulation draws.
 
-Keeping the coefficients together preserves their covariance across
+Drawing the coefficients jointly preserves their covariance across
 outcomes and covariates. `ame$cov.list` stores a `J`-by-`J` covariance
 matrix of the outcome effects for each selected covariate, and
 `ame$weights` retains the observation weights used for averaging.
@@ -380,8 +380,8 @@ matrix of the outcome effects for each selected covariate, and
 These SEs describe coefficient uncertainty while holding the observed
 covariates and weights, or the chosen reference profile, fixed. They do
 not describe the spread of individual effects across the sample. They
-rely on an asymptotic normal approximation. Set a seed for reproducibility and
-increase `R` if Monte Carlo variation is material for the application.
+rely on an asymptotic normal approximation. Set a seed for reproducibility
+and increase `R` if Monte Carlo variation is appreciable in the application.
 
 The reported z statistics divide each effect estimate by its simulated
 SE; p-values use the standard normal distribution. Approximate 95% Wald
@@ -396,7 +396,7 @@ partial effects.
 
 ### Weighted aggregates of effects
 
-Interpret `wtp()` as a user-valued aggregate of share changes. For
+Interpret `wtp()` as an aggregate of share changes valued by the user. For
 example, assign external values of 0, 10, and 5 to the three categories:
 
 ```r
@@ -411,8 +411,8 @@ curve <- plot(
 ```
 
 Values are used in outcome-column order. The aggregate estimates describe
-changes in the supplied value scale, and `wtp.obs` contains the
-observation-level changes when requested from average-across margins.
+changes measured on the supplied value scale, and `wtp.obs` contains the
+observation-level changes when requested from average effects.
 Observation weights have already entered the average effects; the supplied
 category values are a separate aggregation across outcomes.
 
@@ -435,18 +435,18 @@ and Mullahy’s portfolio example illustrate why defining the total and the
 categories matters.
 
 **Check the estimation sample and design.** Rows with missing responses
-or covariates are removed together, and supplied weights are subset using
+or covariates are removed together, and supplied weights are restricted to
 the same rows. `fit$row.no` records the retained original positions.
 Consider rescaling covariates when their numerical scales differ greatly,
 and investigate redundant columns or poorly identified outcomes when
 optimisation or covariance estimation fails.
 
-**Keep the weighting target consistent.** The optional `weights` argument
+**Use weights consistently.** The optional `weights` argument
 supplies relative observation weights that are retained after fitting and
 inherited by average effects, default mean profiles, and profile plots.
 Multiplying all weights by a common positive constant changes none of
 these summaries. Appropriate survey weights can make the represented
-distribution differ from the raw sample; arbitrary weights do not by
+distribution differ from the unweighted sample; arbitrary weights do not by
 themselves establish a population interpretation.
 
 **Assess the mean specification and the sampling assumptions.** Robust
@@ -464,8 +464,8 @@ Murteira discuss cases where a separate participation and allocation
 model can be useful. Standard beta and Dirichlet models offer other
 approaches, usually with stronger distributional assumptions and, in
 their basic forms, restrictions on boundary observations. Those models,
-two-part specifications, and the specification-test procedures studied
-in the papers are not implemented here.
+two-part specifications, and the tests of model specification discussed
+in the cited papers are not implemented here.
 
 **Use appropriate inference for dependent observations.** The current
 sandwich estimator treats observations as independent. Observation

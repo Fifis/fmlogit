@@ -18,15 +18,15 @@
 \item{...}{Unused additional arguments.}
 
 \item{newdata}{Optional finite numeric matrix or data frame containing the
-processed design columns in \code{colnames(object$x)[-1]} order, excluding
+design columns in \code{colnames(object$x)[-1]} order, excluding
 the intercept. A numeric vector supplies one observation. For several
 observations of a single regressor, use a one-column matrix or data frame.
-Factor indicators and interactions must already be encoded as in
+Factor indicators and interactions must already be coded as in
 \code{object$x}. If \code{NULL}, use the retained estimation observations.}
 
 \item{newbeta}{Optional finite \code{J}-by-\code{K} coefficient matrix, with
 outcomes and design columns in the same order as \code{object$coefficient},
-including the intercept column and baseline row. Applies even when
+including the intercept column and baseline row. This applies even when
 \code{newdata = NULL}.}
 }
 \value{
@@ -43,13 +43,13 @@ Predictions use \eqn{p_{ij} = \exp(x_i' \beta_j) /
   \sum_h \exp(x_i' \beta_h)}, evaluated with the estimator's stable softmax.
 The intercept is added as the first design column. Response residuals are
 \eqn{y_{ij} - p_{ij}}; their rows sum to zero.
-The first outcome is the baseline. A common coefficient shift in
-\code{newbeta} is removed so that its first row is zero before prediction.
+The first outcome is the baseline. Before prediction, its coefficients are
+subtracted from every row of \code{newbeta}, leaving the first row zero.
 Fitted values and residuals cover only the observations retained during
 estimation; \code{object$row.no} identifies their original row positions.
 Observation weights affect the fitted coefficients, but individual fitted
 shares, predictions and residuals are not multiplied by those weights.
-A population mean prediction requires a separate weighted average over the
+To obtain a population mean prediction, take a weighted average over the
 relevant covariate distribution.
 }
 \examples{

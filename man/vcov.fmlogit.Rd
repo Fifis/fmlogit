@@ -12,8 +12,8 @@
 \item{...}{Unused.}
 }
 \value{
-Full robust joint covariance matrix, excluding normalized baseline
-  coefficients and retaining cross-outcome covariance blocks.
+The full robust joint covariance matrix, excluding the normalised
+  baseline coefficients and retaining covariance blocks between outcomes.
 }
 \description{
 Extract the full joint covariance matrix of an fmlogit fit

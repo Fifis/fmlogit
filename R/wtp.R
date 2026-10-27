@@ -1,4 +1,4 @@
-#' User-valued aggregates of partial effects
+#' Aggregates of partial effects using supplied values
 #'
 #' Combine outcome-specific partial effects using supplied values, such as
 #' category costs or returns. The function name is retained for compatibility;
@@ -9,25 +9,25 @@
 #'   of \code{rownames(object$effects)}, with the baseline first.
 #' @param varlist Covariate names to select, in the desired output order.
 #'   Defaults to all columns of \code{object$effects}.
-#' @param indv.obs Also return observation-level effects? Requires margins
+#' @param indv.obs Also return effects for each observation? Requires margins
 #'   computed with \code{marg.type = "aveacr"}.
 #' @return An object of class \code{"fmlogit.wtp"} containing \code{wtp}, the
-#'   aggregate effects and, when available, joint simulation inference; and optionally
-#'   \code{wtp.obs}, the observation-level aggregate effects.
+#'   aggregate effects with standard errors and tests where available; and,
+#'   optionally, \code{wtp.obs}, the aggregate effects for each observation.
 #' @details For outcome effects \eqn{m_{jk}} and supplied values \eqn{v_j},
 #' the aggregate effect of covariate \eqn{k} is
 #' \eqn{a_k = \sum_j v_j m_{jk}}. Effects can be derivatives or discrete
 #' changes, evaluated at a reference profile or averaged across observations.
-#' Units depend on the supplied values. These values are treated as fixed.
+#' The supplied values are treated as fixed and determine the units of the aggregate.
 #'
-#' Average effects inherit the fitted observation weights through
-#' \code{effects.fmlogit()}; they are not weighted again here. Individual
+#' Average effects already include the fitted observation weights through
+#' \code{effects.fmlogit()}; no further weighting is needed here. Individual
 #' effects retain one row per observation, including zero-weight observations.
 #'
 #' When effect SEs are available, the aggregate variance is
 #' \eqn{\mathrm{Var}(a_k) = v'\mathrm{Cov}(m_k)v}, using the joint outcome-effect
 #' covariance from Krinsky-Robb draws in \code{object$cov.list}. This retains
-#' covariance between outcomes and conditions on the observed design and weights.
+#' covariance between outcomes while holding the observed design and weights fixed.
 #' Older margins objects without this covariance must be recomputed with
 #' \code{effects.fmlogit(..., se = TRUE)}. Plotting uses this same calculation.
 #' Adding a common constant to the supplied values leaves estimates and SEs

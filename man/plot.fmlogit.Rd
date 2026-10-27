@@ -3,7 +3,7 @@
 \name{plot.fmlogit}
 \alias{plot.fmlogit}
 \alias{plot.fmlogit.margins}
-\title{Plot partial effects and user-valued aggregates}
+\title{Plot partial effects and their aggregates}
 \usage{
 \method{plot}{fmlogit.margins}(
   x,
@@ -53,7 +53,7 @@ Used by the margins method for named axes or groups.}
 \item{against}{For margins, a numeric vector of horizontal coordinates.
 For a fitted model, a non-intercept design-column name: vary that column
 from its minimum to maximum among positive-weight observations, fixing
-other columns at their fitted-weight means.
+other columns at their weighted means from the fitted model.
 The default in both methods is to plot the observed effects by row number.}
 
 \item{against.x, against.y}{Column name in \code{x.data} or \code{y} to use as the
@@ -68,9 +68,10 @@ for example \code{function(z) z > 0}.}
 By default, use a layout close to square. Graphics settings are restored.}
 
 \item{type}{Base graphics plot type; defaults to points for margins and
-lines for aggregates. Lines connect increasing horizontal coordinates within groups.}
+lines for aggregates. Lines join points in increasing order of their horizontal
+coordinates within each group.}
 
-\item{plot.show}{Logical; draw the plots? Plotting data are returned either way.}
+\item{plot.show}{Logical; draw the plots? Plotting data are returned in either case.}
 
 \item{group}{Optional grouping vector for the margins method.}
 
@@ -85,7 +86,8 @@ lines for aggregates. Lines connect increasing horizontal coordinates within gro
 
 \item{effect}{Either \code{"discrete"} (the default) or \code{"marginal"}.}
 
-\item{se}{Compute pointwise aggregate SEs and draw plus/minus one SE?
+\item{se}{Compute standard errors for the aggregate at each point and show
+bars extending one SE in either direction?
 Defaults to \code{FALSE}.}
 
 \item{R}{Number of Krinsky-Robb draws per evaluation point when \code{se = TRUE}.}
@@ -95,12 +97,12 @@ Invisibly, a list with \code{x}, the horizontal coordinates;
   \code{effects}, a matrix with one row per coordinate and one column per
   panel; \code{se}, a matching matrix or \code{NULL}; and \code{group}, a
   factor or \code{NULL}. Margins columns are named \code{variable:outcome};
-  Aggregate columns are covariate names. Rows retain their input order even when
+  aggregate columns use covariate names. Rows retain their input order even when
   lines are drawn in coordinate order.
 }
 \description{
-Plot observation-level marginal or discrete effects, or their user-valued
-aggregates from \code{wtp()}, using base R graphics.
+Plot marginal or discrete effects for each observation, or their aggregates
+from \code{wtp()}, using base R graphics.
 }
 \details{
 The margins method plots the stored observation-level effects. Their
@@ -109,13 +111,14 @@ not the uncertainty of each observation-level effect.
 
 The fitted-model method aggregates effects using \code{wtp.vec}. Optional
 pointwise SEs use the joint outcome-effect covariance from
-\code{effects.fmlogit()} through \code{wtp()}. They condition on the
-evaluation design and fitted weights and can be slow to simulate.
-Use \code{set.seed()} for reproducible SEs. The bars represent one SE,
-rather than a particular confidence level.
-Grid profiles inherit observation weights for their fixed design means and
-observed range. Observation-level plots retain every row, including
-zero-weight observations, without rescaling the individual effects.
+\code{effects.fmlogit()} through \code{wtp()}. They hold the evaluation design
+and estimation weights fixed and may take some time to simulate.
+Use \code{set.seed()} for reproducible SEs. Each bar extends one SE on either
+side of the estimate.
+For a profile curve, other design columns are fixed at their weighted means,
+and the grid spans the positive-weight observations. Plots of individual
+effects retain every row, including zero-weight observations, without
+rescaling the effects.
 Effects refer to processed design columns; varying one column does not
 update related factor indicators, powers, or interactions. See
 \code{effects.fmlogit()} for the reference-profile and averaging definitions.

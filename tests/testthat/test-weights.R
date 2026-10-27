@@ -28,7 +28,7 @@ test_that("Population effects use weighted averages and a weighted mean profile"
 test_that("Weight units do not change effects or their simulated uncertainty", {
   s <- simulatedShares(N = 200L, seed = 12L)
   weights <- ifelse(s$x[, "x1"] > 0, 5, 1)
-  # Both default BHHH fits start independently: large raw weights must not stall it.
+  # Both BHHH fits start independently; large weights must not impede convergence.
   fit <- fmlogit(s$y.dirichlet, s$x, weights = weights, print.level = 0L)
   rescaled <- fmlogit(s$y.dirichlet, s$x, weights = 1e4*weights, print.level = 0L)
   expect_equal(fit$raw.estimates, rescaled$raw.estimates, tolerance = 1e-7)

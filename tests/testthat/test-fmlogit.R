@@ -23,7 +23,7 @@ test_that("Intercept-only starting values reproduce the mean-share ratio", {
   expect_identical(names(theta.init), "other:(Intercept)")
 })
 
-test_that("Both multinomial and Dirichlet DGPs are admitted", {
+test_that("Both multinomial and Dirichlet shares can be fitted", {
   s <- simulatedShares(N = 300L)
   for (y in list(s$y.dirichlet, s$y.multinomial)) {
     fit <- fmlogit(y, s$x, method = "BFGS")
@@ -44,7 +44,7 @@ test_that("Rescaling relative observation weights leaves HC0 inference unchanged
   expect_equal(fit1$vcov.full, fit2$vcov.full, tolerance = 1e-3)
 })
 
-test_that("Missing rows and weights stay aligned", {
+test_that("Weights remain aligned when incomplete observations are removed", {
   s <- simulatedShares(N = 300L)
   y <- s$y.multinomial
   x <- s$x
@@ -104,7 +104,7 @@ test_that("Fitted shares and response residuals are consistent", {
                tolerance = 1e-12)
 })
 
-test_that("Predictions recover known multinomial shares and honor new coefficients", {
+test_that("Predictions recover known multinomial shares and honour new coefficients", {
   s <- simulatedShares(N = 300L)
   fit <- fmlogit(s$y.multinomial, s$x, print.level = 0L)
   newdata <- s$x[1:3, -1L, drop = FALSE]
