@@ -85,7 +85,7 @@
 #' effects.fmlogit(fit, effect = "discrete", varlist = "income")
 #'
 #' @export effects.fmlogit
-#' @exportS3Method
+#' @exportS3Method NULL
 effects.fmlogit <- function(object, effect = c("marginal", "discrete"),
                            marg.type = "atmean", se = FALSE,
                            varlist = NULL, at = NULL, R = 1000, ...) {

@@ -1,6 +1,10 @@
 #' @importFrom Rdpack reprompt
-#' @importFrom maxLik maxLik
-#' @importFrom stats effects fitted predict residuals vcov
+
+# Register the effects() method without importing its generic, also on R < 3.6.
+.onLoad <- function(libname, pkgname) {
+  registerS3method("effects", "fmlogit", effects.fmlogit,
+                   envir = asNamespace("stats"))
+}
 
 asterisk <- function(p.value, sigcode = c(0.10, 0.05, 0.01, 0.001)) {
   stopifnot(length(sigcode) > 0, all(diff(sigcode) < 0), !anyNA(sigcode))

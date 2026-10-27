@@ -11,8 +11,8 @@ Description: Estimation and inference for the fractional multinomial logit
              and
              Mullahy (2015) <doi:10.1515/jem-2012-0006>.
 Depends:
-    R (>= 3.3.0), maxLik
-Imports: Rdpack, graphics, stats
+    R (>= 3.3.0)
+Imports: Rdpack, graphics, maxLik, stats
 RdMacros: Rdpack
 Suggests:
     testthat (>= 3.0.0),
