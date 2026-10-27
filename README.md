@@ -47,6 +47,7 @@ The same notation is used throughout the package:
 | `theta` | The `d = (J - 1) * K` free coefficients, stacked by outcome, with the intercept first in each block. |
 | `eta` | `N`-by-`J` matrix of linear indices, with entries `x_i' beta_j`. |
 | `p` | `N`-by-`J` matrix of conditional mean shares. |
+| `weights` | The `N` non-negative relative observation weights (counts, survey weights etc.). |
 
 Mullahy writes the mean share as ξ and uses the last outcome as the
 baseline. Here `p` denotes that same mean, and `eta` names the linear
