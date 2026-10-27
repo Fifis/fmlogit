@@ -57,7 +57,7 @@ The package uses the same layout throughout estimation and post-estimation:
 | `theta` | The `d = (J - 1) * K` free coefficients, stacked by non-baseline outcome. |
 | `eta` | The `N`-by-`J` matrix of linear indices. |
 | `p` | The `N`-by-`J` matrix of conditional mean shares. |
-| `weights` | The `N` nonnegative relative observation weights, aligned with the retained rows. |
+| `weights` | The `N` non-egative relative observation weights, aligned with the retained rows. |
 
 The indices are `i` for observations, `j` and `h` for outcomes, and `k`
 for design columns. Write $x_i$ as a column vector whose first element is
